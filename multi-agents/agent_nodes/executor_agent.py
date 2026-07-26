@@ -1,418 +1,186 @@
 """
 Executor Agent - 双模式架构
-- 简单模式：ReAct循环，LLM自主决策
+- 简单模式：create_react_agent（替代手写 ReAct 循环）
 - 复杂模式：Plan-then-Execute，先列计划再执行
 使用自己的上下文：executor_context
 """
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import json
-from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
+from langgraph.prebuilt import create_react_agent
 
 from config.settings import (
     QWEN3_MODEL, QWEN3_API_BASE, DASHSCOPE_API_KEY, QWEN3_TEMPERATURE,
     R1_MODEL, DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, R1_TEMPERATURE
 )
-from config.prompts import REACT_THOUGHT_PROMPT
 from graph.state import GlobalState
-from tools.rag_tool import query_travel_knowledge
-from tools.tool_registry import get_tools_description_for_llm
+from tools.tool_provider import get_tool_provider
 
 
-def extract_station_codes(station_result: Any, origin: str, destination: str) -> tuple[str | None, str | None]:
-    """Extract origin and destination station codes from 12306 MCP response."""
-    if not station_result or "error" in str(station_result).lower():
-        return None, None
+def _extract_executor_context(
+    messages: List,
+    existing_rag_history: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """
+    从 create_react_agent 输出的消息列表中提取 ExecutorContext 格式：
+    {tool_results, rag_results_history, collected_info}
+    """
+    tool_results = []
+    rag_results_history = list(existing_rag_history or [])
+    collected_info = {}
 
-    codes_data = json.loads(station_result) if isinstance(station_result, str) else station_result
-    if not isinstance(codes_data, dict):
-        return None, None
+    for msg in messages:
+        if isinstance(msg, ToolMessage):
+            tool_name = msg.name or ""
+            result_str = str(msg.content)
+            tool_results.append({
+                "tool": tool_name,
+                "result": result_str,
+            })
+            collected_info[tool_name] = result_str
+            if tool_name in ("rag_search",):
+                rag_results_history.append(result_str)
 
-    def get_code(city: str) -> str | None:
-        city_data = codes_data.get(city)
-        if isinstance(city_data, list) and city_data:
-            first_station = city_data[0]
-            if isinstance(first_station, dict):
-                return first_station.get("station_code") or first_station.get("code")
-        if isinstance(city_data, dict):
-            return city_data.get("station_code") or city_data.get("code")
-        return None
-
-    return get_code(origin), get_code(destination)
-
-
-async def execute_tool(tool_name: str, params: Dict, manager, 
-                  destination: str, origin: str, travel_date: str) -> Any:
-    """执行单个工具"""
-    async def call_mcp_tool(
-        server_name: str,
-        mcp_tool_name: str,
-        mcp_manager=None,
-        **kwargs
-    ) -> Any:
-        active_manager = mcp_manager or manager
-        print("\n" + "=" * 60)
-        print(f"🔌 MCP调用: {server_name}.{mcp_tool_name}")
-        print(f"📥 输入: {json.dumps(kwargs, ensure_ascii=False, default=str, indent=2)}")
-        result = await active_manager.call_tool(server_name, mcp_tool_name, **kwargs)
-        print(f"📤 输出: {json.dumps(result, ensure_ascii=False, default=str, indent=2) if not isinstance(result, str) else result}")
-        print("=" * 60)
-        return result
-
-    try:
-        if tool_name == "rag_search":
-            query = params.get("query", destination)
-            return await query_travel_knowledge(query)
-        
-        elif tool_name == "gaode_weather":
-            city = params.get("city", destination)
-            return await call_mcp_tool("Gaode Server", "maps_weather", city=city)
-        
-        elif tool_name == "gaode_poi_search":
-            keywords = params.get("keywords", f"{destination} 景点")
-            city = params.get("city", destination)
-            return await call_mcp_tool("Gaode Server", "maps_text_search", keywords=keywords, city=city)
-        
-        elif tool_name == "gaode_hotel_search":
-            keywords = params.get("keywords", f"{destination} 酒店")
-            city = params.get("city", destination)
-            return await call_mcp_tool("Gaode Server", "maps_text_search", keywords=keywords, city=city)
-
-        elif tool_name == "gaode_geo":
-            address = params.get("address", destination)
-            kwargs = {"address": address}
-            if params.get("city"):
-                kwargs["city"] = params.get("city")
-            return await call_mcp_tool("Gaode Server", "maps_geo", **kwargs)
-
-        elif tool_name == "gaode_regeo":
-            location = params.get("location", "")
-            return await call_mcp_tool("Gaode Server", "maps_regeo", location=location)
-
-        elif tool_name == "gaode_ip_location":
-            ip = params.get("ip", "")
-            return await call_mcp_tool("Gaode Server", "maps_ip_location", ip=ip)
-
-        elif tool_name == "gaode_driving":
-            origin_location = params.get("origin", "")
-            destination_location = params.get("destination", "")
-            return await call_mcp_tool(
-                "Gaode Server",
-                "maps_direction_driving",
-                origin=origin_location,
-                destination=destination_location
-            )
-
-        elif tool_name == "gaode_bicycling":
-            origin_location = params.get("origin", "")
-            destination_location = params.get("destination", "")
-            return await call_mcp_tool(
-                "Gaode Server",
-                "maps_direction_bicycling",
-                origin=origin_location,
-                destination=destination_location
-            )
-
-        elif tool_name == "gaode_walking":
-            origin_location = params.get("origin", "")
-            destination_location = params.get("destination", "")
-            return await call_mcp_tool(
-                "Gaode Server",
-                "maps_direction_walking",
-                origin=origin_location,
-                destination=destination_location
-            )
-
-        elif tool_name == "gaode_transit":
-            origin_location = params.get("origin", "")
-            destination_location = params.get("destination", "")
-            city = params.get("city", origin)
-            cityd = params.get("cityd", destination)
-            return await call_mcp_tool(
-                "Gaode Server",
-                "maps_direction_transit_integrated",
-                origin=origin_location,
-                destination=destination_location,
-                city=city,
-                cityd=cityd
-            )
-
-        elif tool_name == "gaode_distance":
-            origin_location = params.get("origin", "")
-            destination_location = params.get("destination", "")
-            return await call_mcp_tool(
-                "Gaode Server",
-                "maps_distance",
-                origin=origin_location,
-                destination=destination_location
-            )
-
-        elif tool_name == "gaode_around_search":
-            keywords = params.get("keywords", "")
-            location = params.get("location", "")
-            kwargs = {"keywords": keywords, "location": location}
-            if params.get("radius"):
-                kwargs["radius"] = params.get("radius")
-            return await call_mcp_tool("Gaode Server", "maps_around_search", **kwargs)
-
-        elif tool_name == "gaode_place_detail":
-            poi_id = params.get("id", "")
-            return await call_mcp_tool("Gaode Server", "maps_place_detail", id=poi_id)
-        
-        elif tool_name == "lucky_day":
-            date = params.get("date", travel_date)
-            return await call_mcp_tool("bazi Server", "getChineseCalendar", date=date)
-        
-        elif tool_name == "train_query":
-            from tools.mcp_tools import get_mcp_manager
-            mgr = await get_mcp_manager()
-            
-            station_result = await call_mcp_tool(
-                "12306 Server",
-                "get-station-code-of-citys",
-                mcp_manager=mgr,
-                citys=f"{origin}|{destination}"
-            )
-            
-            from_code, to_code = extract_station_codes(station_result, origin, destination)
-            
-            if from_code and to_code:
-                return await call_mcp_tool(
-                    "12306 Server",
-                    "get-tickets",
-                    mcp_manager=mgr,
-                    fromStation=from_code,
-                    toStation=to_code,
-                    date=travel_date
-                )
-            return "无法获取站点代码"
-        
-        return f"Unknown tool: {tool_name}"
-    
-    except Exception as e:
-        return f"Tool execution failed: {str(e)}"
+    return {
+        "tool_results": tool_results,
+        "rag_results_history": rag_results_history,
+        "collected_info": collected_info,
+    }
 
 
 async def react_loop(state: GlobalState, planner_context: Dict, executor_context: Dict) -> Dict[str, Any]:
     """
-    ReAct循环 - 简单模式：LLM自主决策
-    
-    核心逻辑：
-    - 设置最大迭代次数作为安全限制
-    - LLM每轮决定：继续收集信息 或 结束并生成答案
-    - 只要LLM判断信息已充分，立即结束循环
+    简单模式：使用 create_react_agent 自动执行 ReAct 循环
+    LangGraph 原生处理 tool calling、迭代和停止条件
     """
     print(f"\n{'='*60}")
-    print("🔄 【简单模式】ReAct循环开始")
+    print("🔄 【简单模式】create_react_agent")
     print(f"{'='*60}")
-    
-    tool_results = executor_context.get("tool_results", [])
-    rag_results_history = executor_context.get("rag_results_history", [])
-    collected_info = executor_context.get("collected_info", {})
-    
+
+    user_query = state.get("user_query", "")
     destination = planner_context.get("destination", "")
     origin = planner_context.get("origin", "")
     travel_days = planner_context.get("travel_days", 0)
     budget = planner_context.get("budget", 0)
     travel_date = planner_context.get("travel_date", "")
     preferences = planner_context.get("preferences", [])
-    user_query = state.get("user_query", "")
-    
-    from tools.mcp_tools import get_mcp_manager
-    manager = await get_mcp_manager()
-    
+
+    # 获取 ToolProvider 的所有工具
+    tool_provider = await get_tool_provider()
+    tools = tool_provider.get_tools()
+
     qwen3_llm = ChatOpenAI(
         model=QWEN3_MODEL,
         base_url=QWEN3_API_BASE,
         api_key=DASHSCOPE_API_KEY,
         temperature=QWEN3_TEMPERATURE
     )
-    
-    # 最大迭代次数仅作为安全限制，防止死循环
-    # LLM可以在任何时候决定提前结束
-    max_iterations = 8
-    iteration_count = 0
-    
-    print(f"\n📋 配置信息:")
-    print(f"  最大迭代次数: {max_iterations} (仅作安全限制)")
-    print(f"  LLM可随时判断信息充分并提前结束")
-    
-    while iteration_count < max_iterations:
-        iteration_count += 1
-        print(f"\n{'='*60}")
-        print(f"🔄 ReAct迭代 {iteration_count}/{max_iterations}")
-        print(f"{'='*60}")
-        
-        # 构建已收集信息
-        collected_info_str = []
-        
-        # 显示已执行的工具列表（防止重复调用）
-        if tool_results:
-            collected_info_str.append("📋 已执行的工具：")
-            executed_tools = set()
-            for result in tool_results:
-                tool_name = result.get("tool", "")
-                if tool_name not in executed_tools:
-                    executed_tools.add(tool_name)
-                    collected_info_str.append(f"  • {tool_name}")
-        
-        # 显示RAG检索结果
-        if rag_results_history:
-            collected_info_str.append("\n📖 RAG检索结果：")
-            for i, rag_result in enumerate(rag_results_history[-2:], 1):  # 只显示最近2个结果
-                # 截取过长的内容
-                truncated = rag_result[:300] + "..." if len(rag_result) > 300 else rag_result
-                collected_info_str.append(f"  [结果{i}]: {truncated}")
-        
-        # 显示工具返回结果
-        if tool_results:
-            collected_info_str.append("\n🔧 工具返回结果：")
-            for result in tool_results[-3:]:  # 只显示最近3个结果
-                tool_name = result.get("tool", "")
-                tool_result = str(result.get("result", ""))
-                # 截取过长的内容
-                truncated = tool_result[:500] + "..." if len(tool_result) > 500 else tool_result
-                collected_info_str.append(f"  [{tool_name}]: {truncated}")
-        
-        if not collected_info_str:
-            collected_info_str = "暂无信息"
-        else:
-            collected_info_str = "\n".join(collected_info_str)
-        
-        # 获取工具描述
-        tools_desc = get_tools_description_for_llm()
-        
-        prompt = REACT_THOUGHT_PROMPT.format(
-            user_query=user_query,
-            destination=destination,
-            origin=origin,
-            travel_days=travel_days,
-            budget=budget,
-            travel_date=travel_date,
-            preferences=preferences,
-            collected_info=collected_info_str,
-            iteration_count=iteration_count,
-            max_iterations=max_iterations,
-            available_tools=tools_desc
-        )
-        
-        try:
-            response = await qwen3_llm.ainvoke([HumanMessage(content=prompt)])
-            content = response.content.strip()
-            
-            print(f"\n🤖 LLM响应:")
-            print(content[:500])
-            
-            if "```json" in content:
-                start = content.find("```json") + 7
-                end = content.find("```", start)
-                if end != -1:
-                    content = content[start:end]
-            elif "```" in content:
-                start = content.find("```") + 3
-                end = content.find("```", start)
-                if end != -1:
-                    content = content[start:end]
-            
-            if content.startswith("{"):
-                brace_count = 0
-                for i, char in enumerate(content):
-                    if char == '{':
-                        brace_count += 1
-                    elif char == '}':
-                        brace_count -= 1
-                        if brace_count == 0:
-                            content = content[:i+1]
-                            break
-            
-            decision = json.loads(content.strip())
-            
-            thought = decision.get("thought", "")
-            action = decision.get("action", "")
-            action_input = decision.get("action_input", {})
-            should_continue = decision.get("continue", True)
-            
-            print(f"\n💡 思考: {thought}")
-            print(f"🎯 决定行动: {action}")
-            print(f"📝 行动参数: {action_input}")
-            print(f"➡️  继续循环: {should_continue}")
-            
-            # 关键逻辑：只要LLM判断信息充分，立即结束循环
-            # 不需要等待走完所有迭代次数
-            if action == "final_answer" or not should_continue:
-                print(f"\n✅ LLM判断信息已充分，提前结束ReAct循环")
-                print(f"   已执行迭代: {iteration_count}/{max_iterations}")
-                break
-            
-            # 🚨 额外保护：检查该工具是否已成功执行过（仅对非rag_search工具）
-            tool_already_executed = False
-            
-            # 只对 MCP 工具（非 rag_search 做重复调用检查
-            if action != "rag_search":
-                for result in tool_results:
-                    if result.get("tool") == action:
-                        # 检查之前的执行是否成功（没有"失败"、"error"等关键词）
-                        prev_result = str(result.get("result", ""))
-                        if "失败" not in prev_result.lower() and "error" not in prev_result.lower() and "Tool execution failed" not in prev_result:
-                            print(f"⚠️  工具 {action} 已成功执行过，跳过重复调用")
-                            tool_already_executed = True
-                            # 使用之前的结果
-                            observation = prev_result
-                            break
-            
-            if not tool_already_executed:
-                print(f"\n🔧 执行工具: {action}")
-                observation = await execute_tool(
-                    action, action_input, manager,
-                    destination, origin, travel_date
-                )
-                
-                print(f"✅ 工具执行完成")
-                
-                tool_results.append({
-                    "tool": action,
-                    "result": observation,
-                    "iteration": iteration_count
-                })
-                
-                if action == "rag_search":
-                    rag_results_history.append(str(observation))
-                
-                collected_info[action] = observation
-            
-        except Exception as e:
-            print(f"❌ ReAct迭代异常: {e}")
-            import traceback
-            traceback.print_exc()
+
+    # 构建系统提示词
+    system_prompt = (
+        f"你是一个智能旅行规划助手。\n\n"
+        f"用户需求：{user_query}\n"
+        f"已提取的信息：\n"
+        f"- 目的地：{destination}\n"
+        f"- 出发地：{origin}\n"
+        f"- 旅行天数：{travel_days}\n"
+        f"- 预算：{budget}\n"
+        f"- 出发日期：{travel_date}\n"
+        f"- 偏好：{preferences}\n\n"
+        f"请使用可用工具查询必要信息。当信息已充分时，直接给出最终回答。\n"
+        f"工具使用建议：\n"
+        f"- 黄历吉日 (lucky_day): 建议为所有完整旅行规划查询\n"
+        f"- 航班查询 (flight_query): 距离>800km或老人儿童同行时建议\n"
+        f"- 天气查询 (gaode_weather): 建议为所有规划查询\n"
+        f"- 火车票查询 (train_query): 自动包含站点代码查询\n"
+        f"- 知识库检索 (rag_search): 查询城市攻略和景点\n"
+        f"- 不要重复调用已成功执行的工具。"
+    )
+
+    def log_agent_turn(state):
+        """打印 Agent 推理轮次"""
+        messages = state.get("messages", [])
+        tool_count = sum(1 for m in messages if isinstance(m, ToolMessage))
+        turn = tool_count + 1
+        print(f"\n--- Agent 第 {turn} 次思考 ---")
+
+    def log_model_output(state):
+        """打印 Agent 本轮决策内容"""
+        messages = state.get("messages", [])
+        if not messages:
+            return
+        last = messages[-1]
+        if hasattr(last, 'tool_calls') and last.tool_calls:
+            for tc in last.tool_calls:
+                print(f"  -> 调用工具: {tc['name']}({tc['args']})")
+        elif hasattr(last, 'content') and last.content:
+            short = last.content[:100].replace('\n', ' ')
+            print(f"  -> 生成回答: {short}...")
+
+    agent = create_react_agent(
+        model=qwen3_llm,
+        tools=tools,
+        prompt=system_prompt,
+        pre_model_hook=log_agent_turn,
+        post_model_hook=log_model_output,
+    )
+
+    print(f"\n🤖 启动 create_react_agent...")
+    print(f"📦 可用工具: {[t.name for t in tools]}")
+
+    result = await agent.ainvoke({
+        "messages": [HumanMessage(content=user_query)]
+    })
+
+    # 从输出消息中提取工具结果
+    messages = result.get("messages", [])
+    print(f"\n📝 Agent 执行完成，共 {len(messages)} 条消息")
+
+    # 打印最终回答
+    for msg in reversed(messages):
+        if isinstance(msg, AIMessage) and msg.content:
+            print(f"\n✅ 最终回答 (前200字符): {msg.content[:200]}")
             break
-    
+
+    # 转换为 ExecutorContext 格式
+    new_ctx = _extract_executor_context(
+        messages, executor_context.get("rag_results_history")
+    )
+
+    # 合并到现有上下文
+    merged = dict(executor_context)
+    merged["tool_results"] = (
+        executor_context.get("tool_results", []) + new_ctx["tool_results"]
+    )
+    merged["rag_results_history"] = new_ctx["rag_results_history"]
+    merged["collected_info"] = {
+        **executor_context.get("collected_info", {}),
+        **new_ctx["collected_info"],
+    }
+
     print(f"\n{'='*60}")
-    print(f"✅ ReAct循环结束 (实际执行: {iteration_count}次)")
+    print(f"✅ create_react_agent 完成")
+    print(f"  工具执行结果数: {len(merged['tool_results'])}")
     print(f"{'='*60}")
-    
-    # 更新自己的上下文
-    executor_context["tool_results"] = tool_results
-    executor_context["rag_results_history"] = rag_results_history
-    executor_context["collected_info"] = collected_info
-    
-    return executor_context
+
+    return merged
 
 
 async def plan_then_execute(state: GlobalState, planner_context: Dict, executor_context: Dict) -> Dict[str, Any]:
     """
     Plan-then-Execute - 复杂模式：先列计划再执行
-    
+
     核心逻辑：
     - 先由 DeepSeek R1 制定详细的查询计划
-    - 然后按计划依次执行每个步骤
+    - 然后按计划依次执行每个步骤（通过 ToolProvider 调用工具）
     - 增加容错机制：某个工具失败不影响后续步骤
     - 完整执行完所有计划步骤（因为是预先规划好的）
     """
     print(f"\n{'='*60}")
     print("📋 【复杂模式】Plan-then-Execute开始")
     print(f"{'='*60}")
-    
+
     destination = planner_context.get("destination", "")
     origin = planner_context.get("origin", "")
     travel_days = planner_context.get("travel_days", 0)
@@ -420,21 +188,22 @@ async def plan_then_execute(state: GlobalState, planner_context: Dict, executor_
     travel_date = planner_context.get("travel_date", "")
     preferences = planner_context.get("preferences", [])
     user_query = state.get("user_query", "")
-    
+
     tool_results = executor_context.get("tool_results", [])
     rag_results_history = executor_context.get("rag_results_history", [])
     collected_info = executor_context.get("collected_info", {})
-    
-    from tools.mcp_tools import get_mcp_manager
-    manager = await get_mcp_manager()
-    
+
+    # 获取 ToolProvider（替换旧的 get_mcp_manager）
+    tool_provider = await get_tool_provider()
+    tool_map = tool_provider.get_tool_map()
+
     r1_llm = ChatOpenAI(
         model=R1_MODEL,
         base_url=DEEPSEEK_BASE_URL,
         api_key=DEEPSEEK_API_KEY,
         temperature=R1_TEMPERATURE
     )
-    
+
     problem = f"""
 用户的旅行需求：
 最新查询：{user_query}
@@ -458,19 +227,19 @@ async def plan_then_execute(state: GlobalState, planner_context: Dict, executor_
   ]
 }}
 
-可用工具：rag_search, gaode_weather, gaode_hotel_search, lucky_day, train_query
+可用工具：{', '.join(tool_map.keys())}
 
 建议包含：rag_search + train_query + gaode_hotel_search + gaode_weather + lucky_day
 """
-    
+
     try:
         print(f"\n🧠 DeepSeek R1开始制定计划...")
         response = await r1_llm.ainvoke([HumanMessage(content=problem)])
         content = response.content.strip()
-        
+
         print(f"\n📋 R1返回原始内容:")
         print(content[:500])
-        
+
         if "```json" in content:
             start = content.find("```json") + 7
             end = content.find("```", start)
@@ -481,83 +250,97 @@ async def plan_then_execute(state: GlobalState, planner_context: Dict, executor_
             end = content.find("```", start)
             if end != -1:
                 content = content[start:end]
-        
+
         plan_data = json.loads(content.strip())
         query_plan = plan_data.get("query_plan", [])
-        
+
         print(f"\n✅ 计划制定完成，共 {len(query_plan)} 步")
         print(f"   📝 说明：将完整执行所有计划步骤（预先规划好的）")
         for i, step in enumerate(query_plan):
             print(f"  步骤 {i+1}: {step.get('tool')} - {step.get('description')}")
-        
+
         failed_steps = []
-        
+
         for i, step in enumerate(query_plan):
             tool_name = step.get("tool", "")
             params = step.get("params", {})
             description = step.get("description", "")
-            
+
             print(f"\n{'='*60}")
             print(f"📋 执行计划步骤 {i+1}/{len(query_plan)}: {tool_name}")
             print(f"{'='*60}")
             print(f"  描述: {description}")
             print(f"  参数: {params}")
-            
+
+            # 通过 tool_map 直接调用工具（替代旧的 execute_tool）
+            tool = tool_map.get(tool_name)
+            if tool is None:
+                error_msg = f"未知工具: {tool_name}"
+                print(f"⚠️ {error_msg}")
+                failed_steps.append({
+                    "step": i + 1,
+                    "tool": tool_name,
+                    "error": error_msg
+                })
+                tool_results.append({
+                    "tool": tool_name,
+                    "result": error_msg,
+                    "step": description,
+                    "success": False
+                })
+                continue
+
             try:
-                observation = await execute_tool(
-                    tool_name, params, manager,
-                    destination, origin, travel_date
-                )
-                
+                observation = await tool.ainvoke(params)
                 print(f"✅ 工具执行完成")
-                
+
                 tool_results.append({
                     "tool": tool_name,
                     "result": observation,
                     "step": description,
                     "success": True
                 })
-                
+
                 if tool_name == "rag_search":
                     rag_results_history.append(str(observation))
-                
+
                 collected_info[tool_name] = observation
-                
+
             except Exception as step_error:
                 print(f"⚠️ 步骤执行失败: {step_error}")
                 print(f"   继续执行后续步骤...")
-                
+
                 failed_steps.append({
                     "step": i + 1,
                     "tool": tool_name,
                     "error": str(step_error)
                 })
-                
+
                 tool_results.append({
                     "tool": tool_name,
                     "result": f"工具执行失败: {str(step_error)}",
                     "step": description,
                     "success": False
                 })
-        
+
         if failed_steps:
             print(f"\n⚠️ 部分步骤执行失败 ({len(failed_steps)}/{len(query_plan)}):")
             for failed in failed_steps:
                 print(f"  步骤 {failed['step']}: {failed['tool']} - {failed['error']}")
-        
+
         print(f"\n✅ Plan-then-Execute 执行完成")
         print(f"   成功步骤: {len(query_plan) - len(failed_steps)}/{len(query_plan)}")
-        
+
     except Exception as e:
         print(f"❌ Plan-then-Execute异常: {e}")
         import traceback
         traceback.print_exc()
-    
+
     # 更新自己的上下文
     executor_context["tool_results"] = tool_results
     executor_context["rag_results_history"] = rag_results_history
     executor_context["collected_info"] = collected_info
-    
+
     return executor_context
 
 

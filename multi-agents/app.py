@@ -309,11 +309,6 @@ try:
 except Exception:
     pass
 
-# 创建全局event loop用于MCP调用
-import asyncio
-_mcp_loop = asyncio.new_event_loop()
-_mcp_loop.set_exception_handler(handle_task_exception)
-_mcp_manager = None
 
 async def run_multi_agents(user_query: str, state: GlobalState = None) -> GlobalState:
     """

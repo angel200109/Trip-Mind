@@ -1,44 +1,12 @@
-# Python bytecode cache
+# Python 字节码缓存
 __pycache__/
 *.py[cod]
 *.pyo
 
-# Virtual environment
+# 虚拟环境
 .venv/
-venv/
-env/
-ENV/
 
-# Environment variables (contains API keys)
+# 环境变量（包含 API Key）
 .env
 
-# Runtime databases
-data/chat_history.db
-data/dataRAG/vectordb/
 
-# Testing & coverage
-.pytest_cache/
-.coverage
-.coverage.*
-htmlcov/
-
-# Packaging
-dist/
-build/
-*.egg-info/
-*.egg
-
-# Logs
-*.log
-
-# IDE & editor
-.vscode/
-.idea/
-.cursor/
-
-# OS generated files
-.DS_Store
-Thumbs.db
-
-# Streamlit
-.streamlit/secrets.toml

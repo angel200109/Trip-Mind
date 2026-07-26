@@ -14,7 +14,7 @@
         },
         {
             "name": "bazi Server",
-            "url": "https://mcp.api-inference.modelscope.net/b9502515547b43/sse",
+            "url": "https://mcp-.api-inference.modelscope.net/sse",
             "description": "八字黄历服务（农历、黄历宜忌、出行吉日）- 必需",
             "required": true
         },
@@ -26,7 +26,7 @@
         },
         {
             "name": "flight Server",
-            "url": "https://your-flight-mcp-server-url/sse",
+            "url": "https://mcp.api-inference.modelscope.net/6225b7eaa28a49/sse",
             "description": "航班查询服务 - 可选",
             "required": false
         }
