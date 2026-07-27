@@ -68,11 +68,11 @@ class ChatHistoryManager:
         
         # 如果需要重新创建，删除旧数据库
         if needs_recreate:
-            print(f"⚠️ 检测到数据库结构问题，删除旧数据库: {self.db_path}")
+            print(f"[WARN] 检测到数据库结构问题，删除旧数据库: {self.db_path}")
             try:
                 self.db_path.unlink()
             except Exception as e:
-                print(f"❌ 删除旧数据库失败: {e}")
+                print(f"[ERROR] 删除旧数据库失败: {e}")
         
         conn = self._get_connection()
         try:
@@ -112,9 +112,9 @@ class ChatHistoryManager:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON chat_messages(timestamp)")
             
             conn.commit()
-            print("✅ 对话历史数据库初始化完成")
+            print("[OK] 对话历史数据库初始化完成")
         except Exception as e:
-            print(f"❌ 数据库初始化失败: {e}")
+            print(f"[ERROR] 数据库初始化失败: {e}")
             import traceback
             traceback.print_exc()
         finally:
@@ -138,7 +138,7 @@ class ChatHistoryManager:
                 VALUES (?, ?, ?, ?, ?, 0)
             """, (session_id, user_id, title, now, now))
             conn.commit()
-            print(f"✅ 新会话已创建: {session_id}")
+            print(f"[OK] 新会话已创建: {session_id}")
             return session_id
         finally:
             conn.close()
@@ -170,7 +170,7 @@ class ChatHistoryManager:
             """, (now, session_id))
             
             conn.commit()
-            print(f"✅ 消息已保存: session={session_id}, type={message_type}, id={message_id}")
+            print(f"[OK] 消息已保存: session={session_id}, type={message_type}, id={message_id}")
             return message_id
         finally:
             conn.close()
@@ -230,7 +230,7 @@ class ChatHistoryManager:
                 )
                 for row in rows
             ]
-            print(f"📊 为用户 {user_id} 找到了 {len(sessions)} 个会话")
+            print(f"[INFO] 为用户 {user_id} 找到了 {len(sessions)} 个会话")
             return sessions
         finally:
             conn.close()
@@ -263,7 +263,7 @@ class ChatHistoryManager:
             cursor.execute("DELETE FROM chat_sessions WHERE session_id = ?", (session_id,))
             
             conn.commit()
-            print(f"✅ 会话已删除: {session_id}")
+            print(f"[OK] 会话已删除: {session_id}")
         finally:
             conn.close()
     
