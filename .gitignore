@@ -9,4 +9,8 @@ __pycache__/
 # 环境变量（包含 API Key）
 .env
 
+# 开发工具临时文件
+.superpowers/
 
+# SQLite 数据库
+*.db
