@@ -1,13 +1,12 @@
 """流式对话服务 - 调用 multi-agents + 生成 SSE 事件流"""
 import uuid
 import json
-import asyncio
 from typing import AsyncGenerator, Optional, Dict, Any, List
 
 from langchain_core.messages import HumanMessage, AIMessage
 from graph.workflow import travel_graph
 from graph.state import GlobalState
-from schemas.models import ChatRequest, SSEChunk
+from schemas.models import ChatRequest
 from services.conversation_service import get_conversation_service
 from services.stream_session import get_stream_session_manager
 
