@@ -30,12 +30,13 @@ images_dir.mkdir(exist_ok=True)
 app.mount("/static/images", StaticFiles(directory=str(images_dir)), name="images")
 
 # 注册路由
+from api.chat import router as chat_router
 from api.conversations import router as conversations_router
+from api.upload import router as upload_router
+
+app.include_router(chat_router)
 app.include_router(conversations_router)
-# from api.chat import router as chat_router
-# from api.upload import router as upload_router
-# app.include_router(chat_router)
-# app.include_router(upload_router)
+app.include_router(upload_router)
 
 
 @app.get("/health")
