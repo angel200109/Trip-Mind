@@ -95,8 +95,10 @@ async def stream_chat(request: ChatRequest) -> AsyncGenerator[str, None]:
     2. 处理重连（如果带 requestId + lastChunkId）
     3. 用 astream_events 执行 graph，拦截事件生成 SSE chunk
     """
+    print("[stream_chat] === START ===", flush=True)
     session_mgr = get_stream_session_manager()
     conv_service = get_conversation_service()
+    print("[stream_chat] services OK", flush=True)
 
     # 处理重连
     if request.requestId and request.lastChunkId and request.lastChunkId > 0:
@@ -112,15 +114,23 @@ async def stream_chat(request: ChatRequest) -> AsyncGenerator[str, None]:
 
     # 新请求
     request_id = request.requestId or str(uuid.uuid4())
+    print(f"[stream_chat] request_id={request_id}", flush=True)
 
     # 确保有 conversation
     conversation_id = request.conversationId
     if not conversation_id:
         conv = conv_service.create_conversation()
         conversation_id = conv.id
+    print(f"[stream_chat] conversation_id={conversation_id}", flush=True)
 
     # 创建 stream session
-    session_mgr.create(request_id, conversation_id)
+    try:
+        session_mgr.create(request_id, conversation_id)
+        print("[stream_chat] session created OK", flush=True)
+    except Exception as e:
+        print(f"[stream_chat] session create FAILED: {e}", flush=True)
+        import traceback; traceback.print_exc()
+        return
 
     chunk_id = 0
 
@@ -134,8 +144,17 @@ async def stream_chat(request: ChatRequest) -> AsyncGenerator[str, None]:
         "data": "",
         "conversationId": conversation_id,
     }
-    session_mgr.append_chunk(request_id, meta_chunk)
+    try:
+        session_mgr.append_chunk(request_id, meta_chunk)
+        print("[stream_chat] append_chunk OK", flush=True)
+    except Exception as e:
+        print(f"[stream_chat] append_chunk FAILED: {e}", flush=True)
+        import traceback; traceback.print_exc()
+        return
+
+    print("[stream_chat] yielding meta chunk...", flush=True)
     yield format_sse("message", meta_chunk)
+    print("[stream_chat] meta chunk yielded OK", flush=True)
 
     # 保存用户消息到数据库
     user_query = ""
@@ -149,20 +168,32 @@ async def stream_chat(request: ChatRequest) -> AsyncGenerator[str, None]:
             break
 
     conv_service.add_message(conversation_id, "user", user_query)
+    print(f"[stream_chat] user_query={user_query}", flush=True)
 
     # 构建 state 并执行 graph
     messages_dicts = [{"role": m.role, "content": m.content} for m in request.chatMessages]
     state = build_state_from_messages(messages_dicts)
+    print("[stream_chat] state built, calling astream_events...", flush=True)
 
     # 跟踪已发送的 status 事件（避免重复）
     sent_agents: set = set()
     sent_tools: set = set()
     final_content = ""
 
+    streaming_started = False
     try:
         async for event in travel_graph.astream_events(state, version="v2"):
             kind = event.get("event", "")
             name = event.get("name", "")
+            if kind == "on_chat_model_stream":
+                if not streaming_started:
+                    print(f"[stream_chat] LLM streaming START ({name})", flush=True)
+                    streaming_started = True
+            else:
+                if streaming_started:
+                    print(f"[stream_chat] LLM streaming END", flush=True)
+                    streaming_started = False
+                print(f"[stream_chat] event: {kind} | {name}", flush=True)
 
             # Agent 节点开始（节点名与 workflow.py 保持一致）
             if kind == "on_chain_start" and name in AGENT_STATUS_MAP:
@@ -216,6 +247,9 @@ async def stream_chat(request: ChatRequest) -> AsyncGenerator[str, None]:
                         yield format_sse("message", content_chunk)
 
     except Exception as e:
+        import traceback
+        print(f"[stream_chat] ERROR: {type(e).__name__}: {e}", flush=True)
+        traceback.print_exc()
         chunk_id += 1
         error_chunk = {
             "requestId": request_id,

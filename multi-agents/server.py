@@ -3,6 +3,11 @@ import sys
 import os
 from pathlib import Path
 
+# Windows 终端默认 GBK 编码，强制 UTF-8 避免 emoji print 崩溃
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 # 确保项目根目录在 sys.path 中
 sys.path.insert(0, str(Path(__file__).parent))
 

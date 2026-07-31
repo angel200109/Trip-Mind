@@ -21,7 +21,7 @@ class StreamSessionManager:
 
     def __init__(self):
         self._sessions: Dict[str, StreamSession] = {}
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
     def create(self, request_id: str, conversation_id: str) -> StreamSession:
         """创建新的流式会话"""
