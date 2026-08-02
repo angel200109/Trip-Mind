@@ -9,6 +9,7 @@ from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 from config.settings import QWEN3_MODEL, QWEN3_API_BASE, DASHSCOPE_API_KEY, QWEN3_TEMPERATURE
 from graph.state import GlobalState
 from user_profile_manager import get_profile_manager
+from memory import get_memory_manager
 
 
 def format_messages(messages: list) -> str:
@@ -94,7 +95,20 @@ async def main_agent_node(state: GlobalState) -> Dict[str, Any]:
     print(f"  上一个 Agent: {current_agent}")
     print(f"  对话历史长度: {len(messages)}")
     print(f"  用户查询: {user_query}")
-    
+
+    # ========== 加载记忆上下文 ==========
+    memory_mgr = get_memory_manager()
+    session_id = state.get("session_id", "default")
+    user_id = state.get("user_id", "default_user")
+
+    try:
+        memory_context = await memory_mgr.router.load_context(session_id, user_id, user_query)
+        # 更新工作记忆
+        memory_mgr.working.update(session_id, {"last_query": user_query, "agent": "main"})
+    except Exception as e:
+        print(f"  ⚠️ 记忆加载失败（降级继续）: {e}")
+        memory_context = {}
+
     # ========== 情况 1：从 Feedback 返回 ==========
     if current_agent == "feedback":
         print(f"\n🔙 从 Feedback Agent 返回")
@@ -121,7 +135,8 @@ async def main_agent_node(state: GlobalState) -> Dict[str, Any]:
                 "planner_context": None,
                 "executor_context": None,
                 "summarizer_context": None,
-                "messages": [AIMessage(content=confirmation_message)]
+                "messages": [AIMessage(content=confirmation_message)],
+                "memory_context": memory_context,
             }
         
         elif tool_results or rag_results:
@@ -134,9 +149,10 @@ async def main_agent_node(state: GlobalState) -> Dict[str, Any]:
                 "next_agent": None,
                 "is_complete": True,
                 "final_answer": final_answer,
-                "messages": [AIMessage(content=final_answer)]
+                "messages": [AIMessage(content=final_answer)],
+                "memory_context": memory_context,
             }
-        
+
         else:
             print(f"\n💬 没有之前的工具结果，给出友好的确认回应")
 
@@ -176,9 +192,10 @@ async def main_agent_node(state: GlobalState) -> Dict[str, Any]:
                 "next_agent": None,
                 "is_complete": True,
                 "final_answer": final_answer,
-                "messages": [AIMessage(content=final_answer)]
+                "messages": [AIMessage(content=final_answer)],
+                "memory_context": memory_context,
             }
-    
+
     # ========== 情况 2：新查询 ==========
     print(f"\n🆕 处理新查询")
     
@@ -215,7 +232,8 @@ async def main_agent_node(state: GlobalState) -> Dict[str, Any]:
         print(f"{'='*60}\n")
         return {
             "current_agent": "main",
-            "next_agent": "feedback"
+            "next_agent": "feedback",
+            "memory_context": memory_context,
         }
     
     if "conversation" in query_type:
@@ -243,6 +261,13 @@ async def main_agent_node(state: GlobalState) -> Dict[str, Any]:
         
         conversation_history = format_messages(messages)
         user_preferences = get_profile_manager().format_profile_for_prompt()
+        # 用记忆系统增强上下文
+        if memory_context.get("preferences"):
+            user_preferences += f"\n\n【记忆系统补充】\n偏好: {memory_context['preferences']}"
+        if memory_context.get("short_term"):
+            recent = memory_context["short_term"][-3:]
+            recent_text = "\n".join([f"  {m.get('role','?')}: {m.get('content','')[:100]}" for m in recent])
+            user_preferences += f"\n最近对话: \n{recent_text}"
         conversation_context = build_conversation_context(conversation_history, user_preferences)
         conversation_chain = conversation_prompt | conversation_llm
         response = (await conversation_chain.ainvoke({
@@ -258,12 +283,14 @@ async def main_agent_node(state: GlobalState) -> Dict[str, Any]:
             "next_agent": None,
             "is_complete": True,
             "final_answer": response,
-            "messages": [AIMessage(content=response)]
+            "messages": [AIMessage(content=response)],
+            "memory_context": memory_context,
         }
     
     print(f"\n🔀 旅游查询，路由给 Planner Agent")
     print(f"{'='*60}\n")
     return {
         "current_agent": "main",
-        "next_agent": "planner"
+        "next_agent": "planner",
+        "memory_context": memory_context,
     }

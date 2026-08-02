@@ -17,6 +17,7 @@ from agent_nodes import (
     summarizer_agent_node,
     feedback_agent_node
 )
+from memory import get_memory_manager
 
 
 def route_after_main(state: GlobalState) -> Literal["planner", "feedback", "final_output"]:
@@ -52,10 +53,11 @@ def route_after_planner(state: GlobalState) -> Literal["executor", "final_output
     return "executor"
 
 
-def final_output_node(state: GlobalState) -> Dict[str, Any]:
+async def final_output_node(state: GlobalState) -> Dict[str, Any]:
     """
     统一最终输出层 - 所有模式的回答汇聚于此
     不调用 LLM，仅确保 final_answer 已生成并标记完成
+    + 触发记忆写回 pipeline
     """
     answer = state.get("final_answer") or ""
     if not answer:
@@ -65,6 +67,24 @@ def final_output_node(state: GlobalState) -> Dict[str, Any]:
     if not answer:
         planner_ctx = state.get("planner_context") or {}
         answer = planner_ctx.get("clarification_question", "")
+
+    # 记忆写回
+    user_query = state.get("user_query", "")
+    if user_query and answer:
+        session_id = state.get("session_id", "default")
+        user_id = state.get("user_id", "default_user")
+        memory_mgr = get_memory_manager()
+        try:
+            await memory_mgr.promotion.promote(
+                session_id=session_id,
+                user_id=user_id,
+                user_message=user_query,
+                assistant_response=answer,
+            )
+            # 清除本次请求的工作记忆
+            memory_mgr.working.clear(session_id)
+        except Exception as e:
+            print(f"  ⚠️ 记忆写回失败（不影响输出）: {e}")
 
     return {
         "final_answer": answer,

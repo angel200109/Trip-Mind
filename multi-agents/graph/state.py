@@ -61,3 +61,10 @@ class GlobalState(TypedDict):
     feedback_type: Optional[str]
     confirmation_message: Optional[str]
     preference_updates: Optional[Dict[str, Any]]
+
+    # ========== 会话标识 ==========
+    session_id: Optional[str]
+    user_id: Optional[str]
+
+    # ========== 记忆系统 ==========
+    memory_context: Optional[Dict[str, Any]]

@@ -92,17 +92,24 @@ def initialize_multi_agents_state() -> GlobalState:
     return {
         "user_query": None,
         "messages": [],
-        
+
         # 各 Agent 自己的上下文
         "planner_context": None,
         "executor_context": None,
         "summarizer_context": None,
-        
+
         # 控制流
         "current_agent": None,
         "next_agent": None,
         "is_complete": False,
-        "final_answer": None
+        "final_answer": None,
+
+        # 会话标识
+        "session_id": None,
+        "user_id": "default_user",
+
+        # 记忆系统
+        "memory_context": None,
     }
 
 # 初始化聊天历史管理器
@@ -329,6 +336,9 @@ async def run_multi_agents(user_query: str, state: GlobalState = None) -> Global
     # 1. 保留全局对话历史（messages）
     # 2. 重置各子 Agent 的上下文
     state["user_query"] = user_query
+    # 设置 session_id 给记忆系统使用
+    if not state.get("session_id"):
+        state["session_id"] = st.session_state.get("current_session_id", "default")
     state["messages"].append(HumanMessage(content=user_query))
     state["is_complete"] = False
     state["current_agent"] = None
