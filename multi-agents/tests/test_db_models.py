@@ -100,3 +100,132 @@ async def test_delete_session_cascades():
 
     messages = await get_session_messages(session_id)
     assert len(messages) == 0
+
+
+# ============================================================
+# user_preferences
+# ============================================================
+
+@pytest.mark.asyncio
+async def test_upsert_and_get_preferences():
+    """测试创建和更新用户偏好"""
+    from db.models import upsert_preferences, get_preferences
+
+    # 首次写入（upsert 创建）
+    await upsert_preferences(
+        "pref_user",
+        budget_level="经济型",
+        travel_style=["自然风光", "历史文化"],
+    )
+
+    prefs = await get_preferences("pref_user")
+    assert prefs is not None
+    assert prefs["user_id"] == "pref_user"
+    assert prefs["budget_level"] == "经济型"
+    assert "自然风光" in prefs["travel_style"]
+
+    # 再次 upsert，只更新部分字段
+    await upsert_preferences("pref_user", budget_level="舒适型")
+
+    prefs2 = await get_preferences("pref_user")
+    assert prefs2["budget_level"] == "舒适型"
+    # travel_style 字段保持不变
+    assert "自然风光" in prefs2["travel_style"]
+
+
+@pytest.mark.asyncio
+async def test_get_preferences_not_found():
+    """测试获取不存在用户的偏好时返回 None"""
+    from db.models import get_preferences
+
+    result = await get_preferences("nonexistent_user_xyz")
+    assert result is None
+
+
+# ============================================================
+# conversation_summaries
+# ============================================================
+
+@pytest.mark.asyncio
+async def test_save_and_get_summary():
+    """测试保存和获取对话摘要"""
+    from db.models import create_session, save_summary, get_user_summaries
+
+    session_id = await create_session("summary_user", "摘要测试会话")
+
+    summary_id = await save_summary(
+        "summary_user",
+        session_id,
+        "用户计划了一次上海到杭州的3日游",
+        key_points=["出发地：上海", "目的地：杭州", "天数：3天"],
+    )
+    assert summary_id > 0
+
+    summaries = await get_user_summaries("summary_user")
+    assert len(summaries) == 1
+    assert summaries[0]["summary"] == "用户计划了一次上海到杭州的3日游"
+    assert "出发地：上海" in summaries[0]["key_points"]
+
+    # 空 key_points 也能保存
+    summary_id2 = await save_summary("summary_user", session_id, "第二条摘要")
+    assert summary_id2 > summary_id
+
+    summaries2 = await get_user_summaries("summary_user")
+    assert len(summaries2) == 2
+
+
+# ============================================================
+# travel_history
+# ============================================================
+
+@pytest.mark.asyncio
+async def test_save_and_get_travel_history():
+    """测试保存和获取旅行历史"""
+    from db.models import create_session, save_travel_history, get_travel_history
+
+    session_id = await create_session("travel_user", "旅行记录测试")
+
+    record_id = await save_travel_history(
+        "travel_user",
+        session_id,
+        destination="杭州",
+        origin="上海",
+        travel_date="2026-10-01",
+        travel_days=3,
+        budget=2000.0,
+        plan_summary="西湖+灵隐寺两日游",
+        status="planned",
+    )
+    assert record_id > 0
+
+    history = await get_travel_history("travel_user")
+    assert len(history) == 1
+    record = history[0]
+    assert record["destination"] == "杭州"
+    assert record["origin"] == "上海"
+    assert record["travel_days"] == 3
+    assert float(record["budget"]) == 2000.0
+    assert record["plan_summary"] == "西湖+灵隐寺两日游"
+    assert record["status"] == "planned"
+
+
+@pytest.mark.asyncio
+async def test_travel_history_limit():
+    """测试 get_travel_history 的 limit 参数"""
+    from db.models import create_session, save_travel_history, get_travel_history
+
+    session_id = await create_session("limit_user", "limit测试")
+
+    for i in range(5):
+        await save_travel_history(
+            "limit_user",
+            session_id,
+            destination=f"目的地{i}",
+            status="planned",
+        )
+
+    all_records = await get_travel_history("limit_user", limit=10)
+    assert len(all_records) == 5
+
+    limited = await get_travel_history("limit_user", limit=3)
+    assert len(limited) == 3
