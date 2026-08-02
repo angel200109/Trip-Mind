@@ -31,3 +31,6 @@ python-multipart>=0.0.6
 
 # PostgreSQL 异步驱动
 asyncpg>=0.29.0
+
+# Redis 异步客户端
+redis[hiredis]>=5.0.0
