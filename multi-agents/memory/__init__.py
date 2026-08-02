@@ -1,5 +1,6 @@
 """Memory layer — 分层记忆系统"""
 from .short_term import ShortTermMemory
 from .working import WorkingMemory
+from .long_term import LongTermMemory
 
-__all__ = ["ShortTermMemory", "WorkingMemory"]
+__all__ = ["ShortTermMemory", "WorkingMemory", "LongTermMemory"]
