@@ -207,10 +207,17 @@ export const chatbotMessage = defineStore("chatbotMessage", {
      * 加载对话列表
      */
     async loadConversations() {
-      const response = await getConversationsApi();
-      this.conversations = expandFirstMockConversation(
-        JSON.parse(JSON.stringify(response.data)) as Conversation[],
-      );
+      console.log("[DEBUG] loadConversations() 开始请求...");
+      try {
+        const response = await getConversationsApi();
+        console.log("[DEBUG] loadConversations() 接口返回:", response.data);
+        this.conversations = expandFirstMockConversation(
+          JSON.parse(JSON.stringify(response.data)) as Conversation[],
+        );
+        console.log("[DEBUG] loadConversations() 设置到 store 后的 conversations:", this.conversations);
+      } catch (err) {
+        console.error("[DEBUG] loadConversations() 请求失败:", err);
+      }
     },
 
     /**
@@ -228,8 +235,9 @@ export const chatbotMessage = defineStore("chatbotMessage", {
     async switchConversation(id: string) {
       flushActiveTypewriter();
       const target = this.conversations.find((item) => item.id === id);
-      if (!target) {
-        // 本地没有，从服务器加载
+      // 列表接口不返回 messages，本地没有消息内容时必须从服务器加载详情
+      if (!target || !Array.isArray(target.messages)) {
+        // 本地没有或没有消息内容，从服务器加载
         const response = await getConversationDetailApi(id);
         this.currentConversationId = id;
         this.messages = cloneMessages(response.data.messages);
@@ -397,8 +405,9 @@ export const chatbotMessage = defineStore("chatbotMessage", {
 
       // 尝试在本地查找对话
       const target = this.conversations.find((item) => item.id === id);
-      if (!target) {
-        // 本地没有，从服务器加载
+      // 列表接口不返回 messages，本地没有消息内容时必须从服务器加载详情
+      if (!target || !Array.isArray(target.messages)) {
+        // 本地没有或没有消息内容，从服务器加载
         const response = await getConversationDetailApi(id).catch(() => null);
         if (!response) {
           // 服务器也没有，开始新对话

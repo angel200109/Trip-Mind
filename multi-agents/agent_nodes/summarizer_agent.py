@@ -201,10 +201,11 @@ async def summarizer_agent_node(state: GlobalState) -> Dict[str, Any]:
     
     final_answer = hints_str + response.content
     summarizer_context["final_summary"] = final_answer
-    
+
     return {
         "summarizer_context": summarizer_context,
         "current_agent": "summarizer",
         "next_agent": None,
-        "is_complete": True
+        "is_complete": True,
+        "final_answer": final_answer
     }

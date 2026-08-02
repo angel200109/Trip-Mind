@@ -52,6 +52,9 @@ class GlobalState(TypedDict):
     current_agent: Optional[str]
     next_agent: Optional[str]
     is_complete: bool
+
+    # ========== 统一最终输出（所有模式的回答汇聚于此） ==========
+    final_answer: Optional[str]
     
     # ========== Feedback 相关 ==========
     needs_replan: Optional[bool]

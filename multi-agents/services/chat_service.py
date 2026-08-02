@@ -80,6 +80,7 @@ def build_state_from_messages(messages: List[dict]) -> GlobalState:
         "current_agent": None,
         "next_agent": None,
         "is_complete": False,
+        "final_answer": None,
         "needs_replan": None,
         "feedback_type": None,
         "confirmation_message": None,
@@ -225,12 +226,14 @@ async def stream_chat(request: ChatRequest) -> AsyncGenerator[str, None]:
                     session_mgr.append_chunk(request_id, tool_chunk)
                     yield format_sse("message", tool_chunk)
 
-            # Summarizer LLM 流式 token
+            # LLM 流式 token（统一最终输出层：summarizer + main 节点的回答）
             elif kind == "on_chat_model_stream":
-                # 通过 langgraph_node 判断是否是 summarizer 节点（节点名为 "summarizer"）
+                # 通过 langgraph_node 判断节点：summarizer 或 main
                 metadata = event.get("metadata", {})
                 node_name = metadata.get("langgraph_node", "")
-                if node_name == "summarizer":
+                # main 节点的分类器 LLM 用 tags 标记，跳过其输出（只输出真正的回答）
+                tags = event.get("tags") or []
+                if node_name in ("summarizer", "main") and "query_classifier" not in tags:
                     chunk_content = event.get("data", {}).get("chunk", None)
                     if chunk_content and hasattr(chunk_content, "content") and chunk_content.content:
                         token = chunk_content.content
@@ -263,15 +266,21 @@ async def stream_chat(request: ChatRequest) -> AsyncGenerator[str, None]:
         yield format_sse("error", error_chunk)
         return
 
-    # 如果没有从 streaming 拿到内容（fallback：从最终 state 提取）
+    # 如果没有从 streaming 拿到内容（fallback：从最终 state 统一提取）
     if not final_content:
         try:
             result = await travel_graph.ainvoke(state)
-            summarizer_ctx = result.get("summarizer_context") or {}
-            answer = summarizer_ctx.get("final_summary", "")
+
+            # 统一最终输出层：所有模式的回答都写入 final_answer
+            answer = result.get("final_answer", "")
+
+            # 兜底：从各上下文提取
             if not answer:
-                planner_ctx = result.get("planner_context") or {}
-                answer = planner_ctx.get("clarification_question", "处理完成")
+                answer = (result.get("summarizer_context") or {}).get("final_summary", "")
+            if not answer:
+                answer = (result.get("planner_context") or {}).get("clarification_question", "")
+            if not answer:
+                answer = "处理完成"
 
             # 一次性发送完整内容
             chunk_id += 1

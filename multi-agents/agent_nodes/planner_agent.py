@@ -262,7 +262,8 @@ async def planner_agent_node(state: GlobalState) -> Dict[str, Any]:
                     "planner_context": planner_context,
                     "current_agent": "planner",
                     "next_agent": None,
-                    "is_complete": True
+                    "is_complete": True,
+                    "final_answer": clarification
                 }
             
             print(f"  ✅ 信息完整，准备执行")
@@ -383,5 +384,6 @@ async def planner_agent_node(state: GlobalState) -> Dict[str, Any]:
             "planner_context": planner_context,
             "current_agent": "planner",
             "next_agent": None,
-            "is_complete": True
+            "is_complete": True,
+            "final_answer": planner_context["clarification_question"]
         }

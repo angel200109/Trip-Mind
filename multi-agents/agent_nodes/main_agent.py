@@ -126,26 +126,27 @@ async def main_agent_node(state: GlobalState) -> Dict[str, Any]:
         
         elif tool_results or rag_results:
             print(f"\n🔄 有之前的工具结果，直接调用 Summarizer 重新生成")
-            
+
             final_answer = await regenerate_with_summarizer(state, confirmation_message)
-            
+
             return {
                 "current_agent": "main",
                 "next_agent": None,
                 "is_complete": True,
+                "final_answer": final_answer,
                 "messages": [AIMessage(content=final_answer)]
             }
         
         else:
             print(f"\n💬 没有之前的工具结果，给出友好的确认回应")
-            
+
             llm = ChatOpenAI(
                 model=QWEN3_MODEL,
                 base_url=QWEN3_API_BASE,
                 api_key=DASHSCOPE_API_KEY,
                 temperature=QWEN3_TEMPERATURE
             )
-            
+
             friendly_prompt = ChatPromptTemplate.from_messages([
                 ("system", """你是一个友好的旅游助手。用户刚刚给了你一个反馈，你已经记住了他们的偏好。
 
@@ -160,20 +161,21 @@ async def main_agent_node(state: GlobalState) -> Dict[str, Any]:
 
 请给出友好的回应：""")
             ])
-            
+
             user_feedback = state.get("user_query", "")
             chain = friendly_prompt | llm
             friendly_response = (await chain.ainvoke({
                 "user_feedback": user_feedback,
                 "confirmation_message": confirmation_message
             })).content.strip()
-            
+
             final_answer = f"{confirmation_message}\n\n{friendly_response}"
-            
+
             return {
                 "current_agent": "main",
                 "next_agent": None,
                 "is_complete": True,
+                "final_answer": final_answer,
                 "messages": [AIMessage(content=final_answer)]
             }
     
@@ -200,7 +202,10 @@ async def main_agent_node(state: GlobalState) -> Dict[str, Any]:
     ])
     
     chain = prompt | llm
-    classification_response = await chain.ainvoke({"user_query": user_query})
+    # tags 标记分类器调用，流式输出层据此跳过（避免输出 "travel/conversation" 等分类结果）
+    classification_response = await chain.ainvoke(
+        {"user_query": user_query}, config={"tags": ["query_classifier"]}
+    )
     query_type = classification_response.content.strip().lower()
     
     print(f"\n🔍 查询类型判断: {query_type}")
@@ -252,6 +257,7 @@ async def main_agent_node(state: GlobalState) -> Dict[str, Any]:
             "current_agent": "main",
             "next_agent": None,
             "is_complete": True,
+            "final_answer": response,
             "messages": [AIMessage(content=response)]
         }
     

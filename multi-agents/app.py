@@ -101,7 +101,8 @@ def initialize_multi_agents_state() -> GlobalState:
         # 控制流
         "current_agent": None,
         "next_agent": None,
-        "is_complete": False
+        "is_complete": False,
+        "final_answer": None
     }
 
 # 初始化聊天历史管理器

@@ -25,13 +25,17 @@ const sessionGroups = computed(() => {
     ? props.conversations
     : [];
 
+  console.log("[DEBUG] ConversationSidebar props.conversations:", conversations);
+
   conversations.forEach((conversation) => {
     const items = groups.get(conversation.groupLabel) ?? [];
     items.push(conversation);
     groups.set(conversation.groupLabel, items);
   });
 
-  return Array.from(groups, ([label, items]) => ({ label, items }));
+  const result = Array.from(groups, ([label, items]) => ({ label, items }));
+  console.log("[DEBUG] sessionGroups 分组结果:", result);
+  return result;
 });
 </script>
 
