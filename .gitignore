@@ -14,3 +14,6 @@ __pycache__/
 
 # SQLite 数据库
 *.db
+
+# 临时文件
+tmp/
