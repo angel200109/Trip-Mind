@@ -43,3 +43,6 @@ RAG_BATCH_SIZE = 10  # ChromaDB批量载入大小，如遇到API限制可调小
 
 # MCP配置
 MCP_CONFIG_PATH = str(PROJECT_ROOT / "config" / "servers_config.json")
+
+# PostgreSQL 配置
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/smart_travel")
