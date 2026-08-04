@@ -58,12 +58,6 @@ class GlobalState(TypedDict):
 
     # ========== PostgreSQL 会话 ID（用于记忆写回） ==========
     pg_session_id: Optional[str]
-    
-    # ========== Feedback 相关 ==========
-    needs_replan: Optional[bool]
-    feedback_type: Optional[str]
-    confirmation_message: Optional[str]
-    preference_updates: Optional[Dict[str, Any]]
 
     # ========== 会话标识 ==========
     session_id: Optional[str]

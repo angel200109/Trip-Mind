@@ -17,7 +17,6 @@ AGENT_STATUS_MAP = {
     "planner": "正在规划行程方案...",
     "executor": "正在执行查询任务...",
     "summarizer": "正在整理旅行方案...",
-    "feedback": "正在处理您的反馈...",
 }
 
 # 工具调用进度文案
@@ -82,10 +81,6 @@ def build_state_from_messages(messages: List[dict], pg_session_id: Optional[str]
         "is_complete": False,
         "final_answer": None,
         "pg_session_id": pg_session_id,
-        "needs_replan": None,
-        "feedback_type": None,
-        "confirmation_message": None,
-        "preference_updates": None,
     }
 
 

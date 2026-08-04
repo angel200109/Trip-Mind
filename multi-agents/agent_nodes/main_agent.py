@@ -54,33 +54,13 @@ def build_conversation_context(conversation_history: str, user_preferences: str)
 {conversation_history}"""
 
 
-async def regenerate_with_summarizer(state: GlobalState, confirmation_message: str) -> str:
-    """
-    直接调用 Summarizer 重新生成回答
-    """
-    from agent_nodes.summarizer_agent import summarizer_agent_node
-    
-    print(f"\n🔄 复用之前的工具结果，调用 Summarizer 重新生成...")
-    
-    result = await summarizer_agent_node(state)
-    
-    summarizer_context = result.get("summarizer_context", {})
-    regenerated_answer = summarizer_context.get("final_summary", "")
-    
-    if regenerated_answer:
-        return f"{confirmation_message}\n\n根据您的反馈，我重新为您生成了回答：\n\n{regenerated_answer}"
-    
-    return f"{confirmation_message}\n\n请您重新提问，我会根据您的新偏好来回答！"
-
-
 async def main_agent_node(state: GlobalState) -> Dict[str, Any]:
     """
     主协调者Agent节点
-    
+
     职责：
-    1. 判断是否是从 Feedback 返回
-    2. 如果是从 Feedback 返回，决定是重新规划还是只重新生成
-    3. 如果是新查询，判断类型并路由
+    1. 加载记忆上下文（偏好/短期记忆等）
+    2. 判断查询类型并路由（travel → planner / conversation → 直接回答）
     """
     print(f"\n{'='*60}")
     print("▶️ Main Agent 开始执行")
@@ -108,94 +88,7 @@ async def main_agent_node(state: GlobalState) -> Dict[str, Any]:
         print(f"  ⚠️ 记忆加载失败（降级继续）: {e}")
         memory_context = {}
 
-    # ========== 情况 1：从 Feedback 返回 ==========
-    if current_agent == "feedback":
-        print(f"\n🔙 从 Feedback Agent 返回")
-        
-        needs_replan = state.get("needs_replan", False)
-        feedback_type = state.get("feedback_type", "neutral")
-        confirmation_message = state.get("confirmation_message", "好的，我记住您的反馈了！")
-        
-        print(f"  feedback_type: {feedback_type}")
-        print(f"  needs_replan: {needs_replan}")
-        
-        executor_context = state.get("executor_context") or {}
-        tool_results = executor_context.get("tool_results", []) if executor_context else []
-        rag_results = executor_context.get("rag_results_history", []) if executor_context else []
-        
-        if needs_replan:
-            print(f"\n🔄 需要重新规划（核心需求改变）")
-            
-            # 重置各子 Agent 的上下文，重新走完整流程
-            return {
-                "current_agent": "main",
-                "next_agent": "planner",
-                "is_complete": False,
-                "planner_context": None,
-                "executor_context": None,
-                "summarizer_context": None,
-                "messages": [AIMessage(content=confirmation_message)],
-                "memory_context": memory_context,
-            }
-        
-        elif tool_results or rag_results:
-            print(f"\n🔄 有之前的工具结果，直接调用 Summarizer 重新生成")
-
-            final_answer = await regenerate_with_summarizer(state, confirmation_message)
-
-            return {
-                "current_agent": "main",
-                "next_agent": None,
-                "is_complete": True,
-                "final_answer": final_answer,
-                "messages": [AIMessage(content=final_answer)],
-                "memory_context": memory_context,
-            }
-
-        else:
-            print(f"\n💬 没有之前的工具结果，给出友好的确认回应")
-
-            llm = ChatOpenAI(
-                model=QWEN3_MODEL,
-                base_url=QWEN3_API_BASE,
-                api_key=DASHSCOPE_API_KEY,
-                temperature=QWEN3_TEMPERATURE
-            )
-
-            friendly_prompt = ChatPromptTemplate.from_messages([
-                ("system", """你是一个友好的旅游助手。用户刚刚给了你一个反馈，你已经记住了他们的偏好。
-
-请给用户一个友好、温暖的回应，包括：
-1. 确认你已经记住了他们的偏好
-2. 询问他们现在有什么旅行需求，或者主动提供一些帮助
-3. 语气要亲切、自然
-
-不要说"请您重新提问"这样的话，要更主动地帮助用户。"""),
-                ("human", """用户的反馈：{user_feedback}
-确认消息：{confirmation_message}
-
-请给出友好的回应：""")
-            ])
-
-            user_feedback = state.get("user_query", "")
-            chain = friendly_prompt | llm
-            friendly_response = (await chain.ainvoke({
-                "user_feedback": user_feedback,
-                "confirmation_message": confirmation_message
-            })).content.strip()
-
-            final_answer = f"{confirmation_message}\n\n{friendly_response}"
-
-            return {
-                "current_agent": "main",
-                "next_agent": None,
-                "is_complete": True,
-                "final_answer": final_answer,
-                "messages": [AIMessage(content=final_answer)],
-                "memory_context": memory_context,
-            }
-
-    # ========== 情况 2：新查询 ==========
+    # ========== 处理新查询 ==========
     print(f"\n🆕 处理新查询")
     
     llm = ChatOpenAI(
@@ -209,32 +102,22 @@ async def main_agent_node(state: GlobalState) -> Dict[str, Any]:
         ("system", """你是一个查询分类器。请判断用户的查询属于哪一类。
 
 分类标准：
-- feedback: 用户在给出反馈（例如"我喜欢古镇"、"下次别推荐寺庙"、"这个不错"、"预算有限"等）
-- conversation: 对话类查询（问候、感谢、再见、追问"我刚刚说了什么"等）
-- travel: 旅游规划类查询（询问景点、天气、美食、攻略、推荐、规划行程等）
+- conversation: 对话类查询（问候、感谢、反馈如"我喜欢古镇"、"预算有限"等）
+- travel: 旅游规划类查询（询问景点、天气、美食、攻略、推荐、规划行程、修改旅行需求等）
 
-请只返回分类结果（feedback/conversation/travel），不要返回其他内容。"""),
+请只返回分类结果（conversation/travel），不要返回其他内容。"""),
         ("human", "用户查询：{user_query}")
     ])
-    
+
     chain = prompt | llm
     # tags 标记分类器调用，流式输出层据此跳过（避免输出 "travel/conversation" 等分类结果）
     classification_response = await chain.ainvoke(
         {"user_query": user_query}, config={"tags": ["query_classifier"]}
     )
     query_type = classification_response.content.strip().lower()
-    
+
     print(f"\n🔍 查询类型判断: {query_type}")
-    
-    if "feedback" in query_type:
-        print(f"\n💬 检测到用户反馈，路由给 Feedback Agent")
-        print(f"{'='*60}\n")
-        return {
-            "current_agent": "main",
-            "next_agent": "feedback",
-            "memory_context": memory_context,
-        }
-    
+
     if "conversation" in query_type:
         print(f"\n💬 检测到对话类查询，直接回答")
         

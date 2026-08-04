@@ -5,7 +5,7 @@ LangGraph 工作流定义
 - 简单模式：Main → Planner → ReAct循环 → Summarizer
 - 复杂模式：Main → Planner → Plan-then-Execute → Summarizer
 - 对话类查询：Main 直接处理
-- 用户反馈：Main → Feedback → Main（决策）
+- 用户画像更新：final_output → 记忆写回（与流程分类解耦）
 """
 from typing import Literal, Dict, Any
 from langgraph.graph import StateGraph, END
@@ -15,12 +15,11 @@ from agent_nodes import (
     planner_agent_node,
     executor_agent_node,
     summarizer_agent_node,
-    feedback_agent_node
 )
 from memory import get_memory_manager
 
 
-def route_after_main(state: GlobalState) -> Literal["planner", "feedback", "final_output"]:
+def route_after_main(state: GlobalState) -> Literal["planner", "final_output"]:
     """
     Main之后的路由决策
     """
@@ -28,20 +27,7 @@ def route_after_main(state: GlobalState) -> Literal["planner", "feedback", "fina
         return "final_output"
     if state.get("needs_clarification", False):
         return "final_output"
-    next_agent = state.get("next_agent", "planner")
-    if next_agent == "feedback":
-        return "feedback"
     return "planner"
-
-
-def route_after_feedback(state: GlobalState) -> Literal["main", "final_output"]:
-    """
-    Feedback之后的路由决策
-    Feedback 总是回到 Main，让 Main 做决策
-    """
-    if state.get("is_complete", False):
-        return "final_output"
-    return "main"
 
 
 def route_after_planner(state: GlobalState) -> Literal["executor", "final_output"]:
@@ -113,7 +99,6 @@ def create_travel_planning_graph():
     workflow.add_node("planner", planner_agent_node)
     workflow.add_node("executor", executor_agent_node)
     workflow.add_node("summarizer", summarizer_agent_node)
-    workflow.add_node("feedback", feedback_agent_node)
     workflow.add_node("final_output", final_output_node)
 
     workflow.set_entry_point("main")
@@ -123,16 +108,6 @@ def create_travel_planning_graph():
         route_after_main,
         {
             "planner": "planner",
-            "feedback": "feedback",
-            "final_output": "final_output",
-        }
-    )
-
-    workflow.add_conditional_edges(
-        "feedback",
-        route_after_feedback,
-        {
-            "main": "main",
             "final_output": "final_output",
         }
     )
