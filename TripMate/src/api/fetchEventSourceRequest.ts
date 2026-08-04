@@ -230,11 +230,13 @@ const runSingleStream = async (
  * 2. 指数退避：重试间隔逐渐增加，避免服务器压力
  * 3. 会话恢复：通过 requestId + lastChunkId 精确恢复
  *
- * @param data 包含聊天消息的请求数据
+ * 只传当前用户提问（userQuery），会话历史由后端从 PG 读取
+ *
+ * @param data 包含当前用户提问的请求数据
  * @throws {Error} 超过最大重试次数后抛出错误
  */
 export const sendMessageByFetchEventSourceApi = async (data: {
-  chatMessages: ConversationType;
+  userQuery: string;
 }): Promise<void> => {
   console.log("[chat-perf] api entered");
   perfTracker.startStream("chat-stream");

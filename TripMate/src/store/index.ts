@@ -321,8 +321,12 @@ export const chatbotMessage = defineStore("chatbotMessage", {
       this.userScrolled = false;
       this.prohibit = true;
 
-      // 调用流式 API
-      await sendMessageByFetchEventSourceApi({ chatMessages: this.messages });
+      // 调用流式 API（只传当前提问，历史由后端从 PG 读取）
+      const userQuery =
+        typeof content === "string"
+          ? content
+          : (content[0] as TextContent).text;
+      await sendMessageByFetchEventSourceApi({ userQuery });
       const aiMessage = this.messages[this.messages.length - 1];
       aiMessage.progress = false;
       this.syncCurrentConversation();
@@ -364,8 +368,13 @@ export const chatbotMessage = defineStore("chatbotMessage", {
       this.userScrolled = false;
       this.prohibit = true;
 
-      // 重新调用流式 API
-      await sendMessageByFetchEventSourceApi({ chatMessages: this.messages });
+      // 重新调用流式 API（只传最后一条用户提问，后端识别为重新生成场景）
+      const lastUserContent = lastUserMessage.content;
+      const userQuery =
+        typeof lastUserContent === "string"
+          ? lastUserContent
+          : (lastUserContent[0] as TextContent).text;
+      await sendMessageByFetchEventSourceApi({ userQuery });
       const aiMessage = this.messages[this.messages.length - 1];
       aiMessage.progress = false;
       this.syncCurrentConversation();

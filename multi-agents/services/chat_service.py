@@ -9,6 +9,15 @@ from graph.state import GlobalState
 from schemas.models import ChatRequest
 from services.conversation_service import get_conversation_service
 from services.stream_session import get_stream_session_manager
+from db import models as db_models
+
+
+def _uuid_or_none(session_id: str) -> Optional[uuid.UUID]:
+    """字符串转 UUID，非法返回 None"""
+    try:
+        return uuid.UUID(str(session_id))
+    except (ValueError, TypeError):
+        return None
 
 
 # Agent 节点进度文案（使用 workflow.py 中实际定义的节点名称）
@@ -153,23 +162,42 @@ async def stream_chat(request: ChatRequest) -> AsyncGenerator[str, None]:
     yield format_sse("message", meta_chunk)
     print("[stream_chat] meta chunk yielded OK", flush=True)
 
-    # 保存用户消息到数据库
-    user_query = ""
-    for msg in reversed(request.chatMessages):
-        if msg.role == "user":
-            content = msg.content
-            if isinstance(content, list):
-                user_query = next((c.get("text", "") for c in content if c.get("type") == "text"), str(content))
-            else:
-                user_query = str(content)
-            break
+    # 用户提问直接来自请求（前端只传当前消息）
+    user_query = request.userQuery
+    if not user_query:
+        print("[stream_chat] WARN: userQuery 为空", flush=True)
 
-    await conv_service.add_message(conversation_id, "user", user_query)
+    # 1. 从 PG 读取会话历史（不含当前消息，权威来源）
+    detail = await conv_service.get_conversation(conversation_id)
+    history_messages: List[dict] = []
+    if detail:
+        history_messages = [{"role": m.role, "content": m.content} for m in detail.messages]
+
+    # 2. 重新生成检测：PG 历史最后一条已是同内容 user 消息（前端 regenerate 场景）
+    #    → 删除旧的 assistant 回答，不重复追加 user 消息
+    is_regenerate = False
+    if history_messages and history_messages[-1]["role"] == "user":
+        last_user_content = history_messages[-1]["content"]
+        if str(last_user_content) == user_query:
+            is_regenerate = True
+            sid = _uuid_or_none(conversation_id)
+            if sid:
+                await db_models.delete_last_assistant_message(sid)
+                print("[stream_chat] 检测到重新生成，已删除旧回答", flush=True)
+
+    if not is_regenerate:
+        # 正常对话：保存用户消息（chat_service 是消息持久化唯一入口）
+        await conv_service.add_message(conversation_id, "user", user_query)
+        # 追加当前消息到历史（供构建对话上下文）
+        history_messages.append({"role": "user", "content": user_query})
+
     print(f"[stream_chat] user_query={user_query}", flush=True)
+    print(f"[stream_chat] 历史 {len(history_messages)} 条（重新生成={is_regenerate}）", flush=True)
 
-    # 构建 state 并执行 graph（带上 PG 会话 ID 供记忆写回）
-    messages_dicts = [{"role": m.role, "content": m.content} for m in request.chatMessages]
-    state = build_state_from_messages(messages_dicts, pg_session_id=conversation_id)
+    # 3. 构建 state 并执行 graph（带上 PG 会话 ID 供记忆写回）
+    state = build_state_from_messages(history_messages, pg_session_id=conversation_id)
+    # 确保 user_query 使用当前提问（历史提取可能为空）
+    state["user_query"] = user_query
     print("[stream_chat] state built, calling astream_events...", flush=True)
 
     # 跟踪已发送的 status 事件（避免重复）

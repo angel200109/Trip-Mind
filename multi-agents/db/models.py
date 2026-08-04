@@ -143,6 +143,30 @@ async def save_message(
         return row["id"]
 
 
+async def delete_last_assistant_message(session_id: uuid.UUID) -> bool:
+    """删除会话中最后一条 assistant 消息（用于重新生成场景），返回是否删除"""
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        # 找到最后一条 assistant 消息 id
+        row = await conn.fetchrow(
+            """
+            SELECT id FROM chat_messages
+            WHERE session_id = $1 AND role = 'assistant'
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+            """,
+            session_id,
+        )
+        if row is None:
+            return False
+        await conn.execute("DELETE FROM chat_messages WHERE id = $1", row["id"])
+        # 更新会话 updated_at
+        await conn.execute(
+            "UPDATE chat_sessions SET updated_at = NOW() WHERE id = $1", session_id
+        )
+        return True
+
+
 async def get_session_messages(
     session_id: uuid.UUID, limit: int = 200
 ) -> list[dict[str, Any]]:

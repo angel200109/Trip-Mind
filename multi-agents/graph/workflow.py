@@ -33,8 +33,10 @@ def route_after_main(state: GlobalState) -> Literal["planner", "final_output"]:
 def route_after_planner(state: GlobalState) -> Literal["executor", "final_output"]:
     """
     Planner之后的路由决策
+    planner 的 needs_clarification 存在 planner_context 内部
     """
-    if state.get("needs_clarification", False):
+    planner_ctx = state.get("planner_context") or {}
+    if planner_ctx.get("needs_clarification", False):
         return "final_output"
     return "executor"
 

@@ -19,9 +19,9 @@ class MessageItem(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    """流式对话请求"""
-    chatMessages: List[MessageItem]
-    conversationId: Optional[str] = None
+    """流式对话请求 - 只传当前用户提问，历史由后端从 PG 读取"""
+    userQuery: str = ""              # 当前用户提问（唯一必需内容）
+    conversationId: Optional[str] = None  # 会话 ID（无则后端新建）
     requestId: Optional[str] = None
     lastChunkId: Optional[int] = 0
 
