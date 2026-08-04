@@ -41,7 +41,7 @@ def format_sse(event: str, data: dict) -> str:
     return f"id: {chunk_id}\nevent: {event}\ndata: {data_str}\n\n"
 
 
-def build_state_from_messages(messages: List[dict]) -> GlobalState:
+def build_state_from_messages(messages: List[dict], pg_session_id: Optional[str] = None) -> GlobalState:
     """从前端消息列表构建 GlobalState"""
     langchain_messages = []
     for msg in messages:
@@ -81,6 +81,7 @@ def build_state_from_messages(messages: List[dict]) -> GlobalState:
         "next_agent": None,
         "is_complete": False,
         "final_answer": None,
+        "pg_session_id": pg_session_id,
         "needs_replan": None,
         "feedback_type": None,
         "confirmation_message": None,
@@ -171,9 +172,9 @@ async def stream_chat(request: ChatRequest) -> AsyncGenerator[str, None]:
     await conv_service.add_message(conversation_id, "user", user_query)
     print(f"[stream_chat] user_query={user_query}", flush=True)
 
-    # 构建 state 并执行 graph
+    # 构建 state 并执行 graph（带上 PG 会话 ID 供记忆写回）
     messages_dicts = [{"role": m.role, "content": m.content} for m in request.chatMessages]
-    state = build_state_from_messages(messages_dicts)
+    state = build_state_from_messages(messages_dicts, pg_session_id=conversation_id)
     print("[stream_chat] state built, calling astream_events...", flush=True)
 
     # 跟踪已发送的 status 事件（避免重复）

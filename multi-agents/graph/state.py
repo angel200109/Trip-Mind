@@ -55,6 +55,9 @@ class GlobalState(TypedDict):
 
     # ========== 统一最终输出（所有模式的回答汇聚于此） ==========
     final_answer: Optional[str]
+
+    # ========== PostgreSQL 会话 ID（用于记忆写回） ==========
+    pg_session_id: Optional[str]
     
     # ========== Feedback 相关 ==========
     needs_replan: Optional[bool]

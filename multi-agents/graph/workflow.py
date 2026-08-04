@@ -73,6 +73,15 @@ async def final_output_node(state: GlobalState) -> Dict[str, Any]:
     if user_query and answer:
         session_id = state.get("session_id", "default")
         user_id = state.get("user_id", "default_user")
+        pg_session_id = state.get("pg_session_id")
+        # 字符串转 UUID（容错）
+        pg_uuid = None
+        if pg_session_id:
+            try:
+                import uuid as _uuid
+                pg_uuid = _uuid.UUID(str(pg_session_id))
+            except (ValueError, TypeError):
+                pg_uuid = None
         memory_mgr = get_memory_manager()
         try:
             await memory_mgr.promotion.promote(
@@ -80,6 +89,7 @@ async def final_output_node(state: GlobalState) -> Dict[str, Any]:
                 user_id=user_id,
                 user_message=user_query,
                 assistant_response=answer,
+                pg_session_id=pg_uuid,
             )
             # 清除本次请求的工作记忆
             memory_mgr.working.clear(session_id)
