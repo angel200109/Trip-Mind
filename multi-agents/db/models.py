@@ -173,6 +173,23 @@ async def get_session_messages(
 # user_preferences
 # ============================================================
 
+# 允许更新的字段白名单（防止 LLM 输出/外部输入拼接非法 SQL 字段）
+ALLOWED_PREF_FIELDS = {
+    "travel_style", "budget_level", "hotel_preference",
+    "liked_activities", "disliked_activities", "cuisine_preference",
+    "transport_priority", "max_daily_budget", "dietary_restrictions",
+    "room_type_preference", "destination_types",
+    "travel_season_preference", "daily_schedule_preference",
+}
+
+# 数组合并字段（append + 去重），其余为标量覆盖
+ARRAY_PREF_FIELDS = {
+    "travel_style", "hotel_preference", "liked_activities",
+    "disliked_activities", "cuisine_preference", "transport_priority",
+    "dietary_restrictions", "destination_types", "travel_season_preference",
+}
+
+
 async def get_preferences(user_id: str) -> Optional[dict[str, Any]]:
     """获取用户偏好，不存在返回 None"""
     pool = get_pool()
@@ -184,24 +201,46 @@ async def get_preferences(user_id: str) -> Optional[dict[str, Any]]:
 
 
 async def upsert_preferences(user_id: str, **fields) -> None:
-    """创建或更新用户偏好（仅更新传入的字段）"""
-    pool = get_pool()
+    """创建或更新用户偏好（仅更新白名单内字段）
+
+    - 数组字段（TEXT[]）：append + 去重（画像累积，不覆盖）
+    - 标量字段：整体覆盖
+    """
+    # 白名单过滤（审核意见：防止 SQL 字段注入/拼错）
+    fields = {k: v for k, v in fields.items() if k in ALLOWED_PREF_FIELDS}
     if not fields:
         return
 
-    # 构建 SET 子句
-    set_parts = []
-    values = [user_id]
-    idx = 2
+    pool = get_pool()
 
-    for key, value in fields.items():
-        set_parts.append(f"{key} = ${idx}")
-        values.append(value)
-        idx += 1
-
-    set_clause = ", ".join(set_parts)
-
+    # 数组字段合并：读取旧值 → append + 去重
     async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT * FROM user_preferences WHERE user_id = $1", user_id
+        )
+        existing = dict(row) if row else {}
+
+        merged_fields = {}
+        for key, value in fields.items():
+            if key in ARRAY_PREF_FIELDS and isinstance(value, list):
+                old = existing.get(key) or []
+                old = list(old) if isinstance(old, (list, tuple)) else []
+                merged = old + [v for v in value if v not in old]
+                merged_fields[key] = merged
+            else:
+                merged_fields[key] = value
+
+        # 构建 SET 子句
+        set_parts = []
+        values = [user_id]
+        idx = 2
+        for key, value in merged_fields.items():
+            set_parts.append(f"{key} = ${idx}")
+            values.append(value)
+            idx += 1
+
+        set_clause = ", ".join(set_parts)
+
         # 尝试更新
         result = await conn.execute(
             f"UPDATE user_preferences SET {set_clause}, updated_at = NOW() WHERE user_id = $1",
