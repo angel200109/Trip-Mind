@@ -1,96 +1,98 @@
-"""会话管理服务 - 封装 chat_history_manager，适配前端格式"""
-from datetime import datetime, timedelta
+"""会话管理服务 - 基于 PostgreSQL (db.models)，适配前端格式"""
 from typing import List, Optional
-from chat_history_manager import get_chat_history_manager, ChatHistoryManager
+import uuid
+
+from db import models as db_models
 from schemas.models import ConversationListItem, ConversationDetail, MessageItem
 
+# 当前单用户模式
+USER_ID = "default_user"
 
-def compute_group_label(updated_at: str) -> str:
-    """根据更新时间计算分组标签"""
+# 会话列表不再按时间分组，统一归为一组
+GROUP_LABEL = "全部对话"
+
+
+def _parse_session_id(session_id: str) -> Optional[uuid.UUID]:
+    """前端传入的会话 ID 字符串转 UUID，非法返回 None"""
     try:
-        dt = datetime.fromisoformat(updated_at)
+        return uuid.UUID(str(session_id))
     except (ValueError, TypeError):
-        return "更早"
-
-    now = datetime.now()
-    diff = now - dt
-
-    if diff < timedelta(days=1) and dt.date() == now.date():
-        return "今天"
-    elif diff < timedelta(days=2) and dt.date() == (now - timedelta(days=1)).date():
-        return "昨天"
-    elif diff < timedelta(days=7):
-        return "7天内"
-    elif diff < timedelta(days=30):
-        return "30天内"
-    else:
-        return "更早"
+        return None
 
 
 class ConversationService:
-    """会话管理服务"""
+    """会话管理服务（PostgreSQL）"""
 
-    def __init__(self):
-        self._manager: ChatHistoryManager = get_chat_history_manager()
-
-    def list_conversations(self, limit: int = 50) -> List[ConversationListItem]:
+    async def list_conversations(self, limit: int = 50) -> List[ConversationListItem]:
         """获取会话列表（不含消息内容）"""
-        sessions = self._manager.get_user_sessions(limit=limit)
+        sessions = await db_models.get_user_sessions(USER_ID, limit=limit)
         return [
             ConversationListItem(
-                id=s.session_id,
-                title=s.title,
-                groupLabel=compute_group_label(s.updated_at),
-                messageCount=s.message_count,
+                id=str(s["id"]),
+                title=s["title"] or "",
+                groupLabel=GROUP_LABEL,
+                messageCount=s.get("message_count", 0),
             )
             for s in sessions
         ]
 
-    def get_conversation(self, session_id: str) -> Optional[ConversationDetail]:
+    async def get_conversation(self, session_id: str) -> Optional[ConversationDetail]:
         """获取会话详情（含所有消息）"""
-        sessions = self._manager.get_user_sessions(limit=9999)
-        session = next((s for s in sessions if s.session_id == session_id), None)
+        sid = _parse_session_id(session_id)
+        if not sid:
+            return None
+
+        sessions = await db_models.get_user_sessions(USER_ID, limit=9999)
+        session = next((s for s in sessions if s["id"] == sid), None)
         if not session:
             return None
 
-        messages = self._manager.get_session_messages(session_id)
+        messages = await db_models.get_session_messages(sid)
         return ConversationDetail(
-            id=session.session_id,
-            title=session.title,
-            groupLabel=compute_group_label(session.updated_at),
+            id=str(session["id"]),
+            title=session["title"] or "",
+            groupLabel=GROUP_LABEL,
             messages=[
                 MessageItem(
-                    role="assistant" if m.message_type == "ai" else "user",
-                    content=m.content,
+                    role=m["role"],  # PG 中直接存 "user"/"assistant"
+                    content=m["content"],
                 )
                 for m in messages
             ],
         )
 
-    def create_conversation(self, title: Optional[str] = None) -> ConversationListItem:
+    async def create_conversation(self, title: Optional[str] = None) -> ConversationListItem:
         """创建新会话"""
-        session_id = self._manager.create_session(title=title or "新的对话")
+        session_id = await db_models.create_session(USER_ID, title or "新的对话")
         return ConversationListItem(
-            id=session_id,
+            id=str(session_id),
             title=title or "新的对话",
-            groupLabel="今天",
+            groupLabel=GROUP_LABEL,
             messageCount=0,
         )
 
-    def delete_conversation(self, session_id: str) -> bool:
+    async def delete_conversation(self, session_id: str) -> bool:
         """删除会话"""
-        self._manager.delete_session(session_id)
+        sid = _parse_session_id(session_id)
+        if not sid:
+            return False
+        await db_models.delete_session(sid)
         return True
 
-    def update_title(self, session_id: str, title: str) -> bool:
+    async def update_title(self, session_id: str, title: str) -> bool:
         """更新会话标题"""
-        self._manager.update_session_title(session_id, title)
+        sid = _parse_session_id(session_id)
+        if not sid:
+            return False
+        await db_models.update_session_title(sid, title)
         return True
 
-    def add_message(self, session_id: str, role: str, content: str) -> int:
+    async def add_message(self, session_id: str, role: str, content: str) -> int:
         """添加消息到会话"""
-        message_type = "ai" if role == "assistant" else "user"
-        return self._manager.add_message(session_id, message_type, content)
+        sid = _parse_session_id(session_id)
+        if not sid:
+            return 0
+        return await db_models.save_message(sid, role, content)
 
 
 _conversation_service: Optional[ConversationService] = None

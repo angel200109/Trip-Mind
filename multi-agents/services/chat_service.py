@@ -120,7 +120,7 @@ async def stream_chat(request: ChatRequest) -> AsyncGenerator[str, None]:
     # 确保有 conversation
     conversation_id = request.conversationId
     if not conversation_id:
-        conv = conv_service.create_conversation()
+        conv = await conv_service.create_conversation()
         conversation_id = conv.id
     print(f"[stream_chat] conversation_id={conversation_id}", flush=True)
 
@@ -168,7 +168,7 @@ async def stream_chat(request: ChatRequest) -> AsyncGenerator[str, None]:
                 user_query = str(content)
             break
 
-    conv_service.add_message(conversation_id, "user", user_query)
+    await conv_service.add_message(conversation_id, "user", user_query)
     print(f"[stream_chat] user_query={user_query}", flush=True)
 
     # 构建 state 并执行 graph
@@ -310,7 +310,7 @@ async def stream_chat(request: ChatRequest) -> AsyncGenerator[str, None]:
 
     # 保存 AI 回复到数据库
     if final_content:
-        conv_service.add_message(conversation_id, "assistant", final_content)
+        await conv_service.add_message(conversation_id, "assistant", final_content)
 
     # 发送 done 事件
     chunk_id += 1

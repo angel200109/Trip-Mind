@@ -35,15 +35,18 @@ async def create_session(user_id: str, title: Optional[str] = None) -> uuid.UUID
 
 
 async def get_user_sessions(user_id: str, limit: int = 50) -> list[dict[str, Any]]:
-    """获取用户的会话列表，按更新时间倒序"""
+    """获取用户的会话列表（含消息计数），按更新时间倒序"""
     pool = get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT id, user_id, title, created_at, updated_at
-            FROM chat_sessions
-            WHERE user_id = $1
-            ORDER BY updated_at DESC
+            SELECT
+                cs.id, cs.user_id, cs.title, cs.created_at, cs.updated_at,
+                (SELECT COUNT(*) FROM chat_messages cm
+                 WHERE cm.session_id = cs.id) AS message_count
+            FROM chat_sessions cs
+            WHERE cs.user_id = $1
+            ORDER BY cs.updated_at DESC
             LIMIT $2
             """,
             user_id, limit,
