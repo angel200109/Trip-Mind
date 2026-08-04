@@ -8,7 +8,6 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 from config.settings import QWEN3_MODEL, QWEN3_API_BASE, DASHSCOPE_API_KEY, QWEN3_TEMPERATURE
 from graph.state import GlobalState
-from user_profile_manager import get_profile_manager
 from memory import get_memory_manager
 
 
@@ -260,10 +259,11 @@ async def main_agent_node(state: GlobalState) -> Dict[str, Any]:
         ])
         
         conversation_history = format_messages(messages)
-        user_preferences = get_profile_manager().format_profile_for_prompt()
-        # 用记忆系统增强上下文
-        if memory_context.get("preferences"):
-            user_preferences += f"\n\n【记忆系统补充】\n偏好: {memory_context['preferences']}"
+        # 用户偏好统一从 memory_context 读取（入口 router 已注入）
+        from agent_nodes.summarizer_agent import format_preferences_for_prompt
+        prefs = memory_context.get("preferences") or {}
+        user_preferences = format_preferences_for_prompt(prefs) if prefs else "暂无记录"
+        # 用短期记忆增强上下文
         if memory_context.get("short_term"):
             recent = memory_context["short_term"][-3:]
             recent_text = "\n".join([f"  {m.get('role','?')}: {m.get('content','')[:100]}" for m in recent])

@@ -1,14 +1,43 @@
 """
 Summarizer Agent - 负责整合结果生成最终回答
 使用自己的上下文：summarizer_context
-支持用户偏好个性化
+支持用户偏好个性化（从 state.memory_context 统一读取）
 """
 from typing import Dict, Any
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from config.settings import QWEN3_MODEL, QWEN3_API_BASE, DASHSCOPE_API_KEY, QWEN3_TEMPERATURE
 from graph.state import GlobalState
-from user_profile_manager import get_profile_manager
+
+
+def format_preferences_for_prompt(prefs: Dict[str, Any]) -> str:
+    """将偏好 dict 格式化为提示词字符串（基于 PG user_preferences 字段）"""
+    if not prefs:
+        return ""
+
+    lines = ["========== 用户偏好（请根据这些偏好调整推荐） =========="]
+
+    if prefs.get("travel_style"):
+        lines.append(f"- 旅行风格：{', '.join(prefs['travel_style'])}")
+    if prefs.get("budget_level"):
+        lines.append(f"- 预算水平：{prefs['budget_level']}")
+    if prefs.get("max_daily_budget"):
+        lines.append(f"- 每日预算上限：{prefs['max_daily_budget']}元")
+    if prefs.get("hotel_preference"):
+        lines.append(f"- 住宿偏好：{', '.join(prefs['hotel_preference'])}")
+    if prefs.get("dietary_restrictions"):
+        lines.append(f"- 饮食禁忌：{', '.join(prefs['dietary_restrictions'])}")
+    if prefs.get("cuisine_preference"):
+        lines.append(f"- 菜系偏好：{', '.join(prefs['cuisine_preference'])}")
+    if prefs.get("liked_activities"):
+        lines.append(f"- 喜欢的活动：{', '.join(prefs['liked_activities'])}")
+    if prefs.get("disliked_activities"):
+        lines.append(f"- 不喜欢的活动：{', '.join(prefs['disliked_activities'])}")
+    if prefs.get("transport_priority"):
+        lines.append(f"- 交通优先级：{', '.join(prefs['transport_priority'])}")
+
+    lines.append("=" * 50)
+    return "\n".join(lines)
 
 
 async def summarizer_agent_node(state: GlobalState) -> Dict[str, Any]:
@@ -48,9 +77,10 @@ async def summarizer_agent_node(state: GlobalState) -> Dict[str, Any]:
         "final_summary": None
     }
     
-    # 获取用户偏好
-    profile_manager = get_profile_manager()
-    user_preferences_str = profile_manager.format_profile_for_prompt()
+    # 获取用户偏好（统一从 state.memory_context 读取，入口 router 已注入）
+    memory_context = state.get("memory_context") or {}
+    prefs = memory_context.get("preferences") or {}
+    user_preferences_str = format_preferences_for_prompt(prefs)
     
     print(f"📊 状态信息:")
     print(f"  query_mode: {query_mode}")
