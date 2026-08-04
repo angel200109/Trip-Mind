@@ -87,6 +87,15 @@ from graph.state import GlobalState
 from chat_history_manager import get_chat_history_manager
 from config.llm_errors import get_user_facing_llm_error
 
+# 初始化 PostgreSQL 连接池（幂等，Streamlit 脚本重跑无副作用）
+try:
+    from db.postgres import init_db
+    import asyncio as _asyncio
+    _asyncio.run(init_db())
+    print("[DB] PostgreSQL 连接池已初始化")
+except Exception as _db_err:
+    print(f"[DB] PostgreSQL 初始化失败（降级运行）: {type(_db_err).__name__}: {_db_err}")
+
 def initialize_multi_agents_state() -> GlobalState:
     """初始化Multi-Agents全局状态 - 按新架构"""
     return {

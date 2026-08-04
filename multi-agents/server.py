@@ -11,6 +11,7 @@ if sys.platform == "win32":
 # 确保项目根目录在 sys.path 中
 sys.path.insert(0, str(Path(__file__).parent))
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -19,7 +20,26 @@ from dotenv import load_dotenv
 # 加载环境变量
 load_dotenv(dotenv_path=Path(__file__).parent / ".env", override=True)
 
-app = FastAPI(title="Smart Travel Multi-Agents API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """启动时初始化 PostgreSQL 连接池，关闭时释放"""
+    from db.postgres import init_db, close_db
+
+    try:
+        await init_db()
+        print("[DB] PostgreSQL 连接池已初始化")
+    except Exception as e:
+        print(f"[DB] PostgreSQL 初始化失败（降级运行）: {type(e).__name__}: {e}")
+    yield
+    try:
+        await close_db()
+        print("[DB] PostgreSQL 连接池已关闭")
+    except Exception:
+        pass
+
+
+app = FastAPI(title="Smart Travel Multi-Agents API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
