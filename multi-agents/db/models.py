@@ -34,6 +34,38 @@ async def create_session(user_id: str, title: Optional[str] = None) -> uuid.UUID
         return row["id"]
 
 
+async def create_session_with_id(
+    session_id: uuid.UUID,
+    user_id: str,
+    title: Optional[str],
+    created_at: Optional[str] = None,
+    updated_at: Optional[str] = None,
+) -> uuid.UUID:
+    """创建会话并保留指定 ID 和时间戳（用于 SQLite → PG 数据迁移）"""
+    pool = get_pool()
+
+    def _parse_dt(value: Optional[str]):
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(value)
+        except (ValueError, TypeError):
+            return None
+
+    created_dt = _parse_dt(created_at)
+    updated_dt = _parse_dt(updated_at)
+
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO chat_sessions (id, user_id, title, created_at, updated_at)
+            VALUES ($1, $2, $3, COALESCE($4, NOW()), COALESCE($5, NOW()))
+            """,
+            session_id, user_id, title, created_dt, updated_dt,
+        )
+        return session_id
+
+
 async def get_user_sessions(user_id: str, limit: int = 50) -> list[dict[str, Any]]:
     """获取用户的会话列表（含消息计数），按更新时间倒序"""
     pool = get_pool()
