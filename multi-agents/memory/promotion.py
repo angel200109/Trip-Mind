@@ -62,30 +62,26 @@ class MemoryPromotion:
             }
         """
         result = {
-            "saved_to_pg": False,
             "saved_to_short_term": False,
             "preferences_updated": False,
             "travel_history_saved": False,
         }
 
-        # 1. 保存到 PG（如果有 pg_session_id）
-        if pg_session_id:
-            await models.save_message(pg_session_id, "user", user_message)
-            await models.save_message(pg_session_id, "assistant", assistant_response)
-            result["saved_to_pg"] = True
+        # 说明：聊天消息（user/assistant）不在这里保存——
+        # 由 chat_service 统一负责（流式开始存 user、结束存 assistant），避免重复。
 
-        # 2. 保存到短期记忆
+        # 1. 保存到短期记忆（Redis）
         await self.short_term.add_message(session_id, "user", user_message)
         await self.short_term.add_message(session_id, "assistant", assistant_response)
         result["saved_to_short_term"] = True
 
-        # 3. 检测并提取偏好
+        # 2. 检测并提取偏好
         preferences = self._extract_preferences(user_message, assistant_response)
         if preferences:
             await self.long_term.update_preferences(user_id, **preferences)
             result["preferences_updated"] = True
 
-        # 4. 检测旅行计划
+        # 3. 检测旅行计划
         travel_info = self._extract_travel_info(user_message, assistant_response)
         if travel_info and pg_session_id:
             await models.save_travel_history(
