@@ -2,14 +2,14 @@
 记忆提升 — 请求结束后决定哪些信息写入短期/长期记忆。
 
 写回 pipeline:
-1. 用户消息 + 助手回复 → PG chat_messages（持久化）
-2. 用户消息 + 助手回复 → Redis 短期记忆（热缓存）
-3. 检测偏好变化 → 更新 PG user_preferences
-4. 检测旅行计划完成 → 写入 PG travel_history
-5. 工作记忆导出 → 可选摘要归档
+1. 用户消息 + 助手回复 → Redis 短期记忆（热缓存）
+2. 检测偏好变化（正则快路径 → LLM 兜底）→ 更新 PG user_preferences
+3. 检测旅行计划完成 → 写入 PG travel_history
+（聊天消息由 chat_service 统一持久化，promote 不重复保存）
 """
 from __future__ import annotations
 
+import asyncio
 import re
 import uuid
 from typing import Optional
@@ -17,6 +17,7 @@ from typing import Optional
 from memory.short_term import ShortTermMemory
 from memory.long_term import LongTermMemory
 from memory.working import WorkingMemory
+from memory.preference_extractor import extract_preferences_with_llm
 from db import models
 
 
@@ -25,11 +26,9 @@ class MemoryPromotion:
     记忆提升：请求结束后决定哪些信息写入短期/长期记忆。
 
     写回 pipeline:
-    1. 用户消息 + 助手回复 → PG chat_messages（持久化）
-    2. 用户消息 + 助手回复 → Redis 短期记忆（热缓存）
-    3. 检测偏好变化 → 更新 PG user_preferences
-    4. 检测旅行计划完成 → 写入 PG travel_history
-    5. 工作记忆导出 → 可选摘要归档
+    1. 用户消息 + 助手回复 → Redis 短期记忆（热缓存）
+    2. 检测偏好变化（正则快路径 → LLM 兜底，5s 超时）→ 更新 PG user_preferences
+    3. 检测旅行计划完成 → 写入 PG travel_history
     """
 
     def __init__(
@@ -75,8 +74,24 @@ class MemoryPromotion:
         await self.short_term.add_message(session_id, "assistant", assistant_response)
         result["saved_to_short_term"] = True
 
-        # 2. 检测并提取偏好
+        # 2. 检测并提取偏好（正则快路径 → LLM 兜底，带超时不阻塞流式）
         preferences = self._extract_preferences(user_message, assistant_response)
+        if not preferences:
+            try:
+                current_prefs = await self.long_term.get_preferences(user_id) or {}
+                preferences = await asyncio.wait_for(
+                    extract_preferences_with_llm(
+                        user_message, assistant_response, current_prefs
+                    ),
+                    timeout=5.0,
+                )
+                if preferences:
+                    print(f"  [LLM] 提取到偏好: {preferences}")
+            except asyncio.TimeoutError:
+                print("  [WARN] LLM 偏好提取超时，跳过")
+            except Exception as e:
+                print(f"  [WARN] LLM 偏好提取失败: {e}")
+
         if preferences:
             await self.long_term.update_preferences(user_id, **preferences)
             result["preferences_updated"] = True
