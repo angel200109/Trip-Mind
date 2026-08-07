@@ -22,9 +22,10 @@ def _uuid_or_none(session_id: str) -> Optional[uuid.UUID]:
 
 # Agent 节点进度文案（使用 workflow.py 中实际定义的节点名称）
 AGENT_STATUS_MAP = {
-    "main": "正在分析您的需求...",
+    "intent_router": "正在分析您的需求...",
+    "react_executor": "正在查询相关信息...",
     "planner": "正在规划行程方案...",
-    "executor": "正在执行查询任务...",
+    "step_executor": "正在执行查询任务...",
     "summarizer": "正在整理旅行方案...",
 }
 
@@ -82,7 +83,7 @@ def build_state_from_messages(messages: List[dict], pg_session_id: Optional[str]
     return {
         "user_query": user_query,
         "messages": langchain_messages,
-        "planner_context": None,
+        "intent_context": None,
         "executor_context": None,
         "summarizer_context": None,
         "current_agent": None,
@@ -257,7 +258,7 @@ async def stream_chat(request: ChatRequest) -> AsyncGenerator[str, None]:
                 node_name = metadata.get("langgraph_node", "")
                 # main 节点的分类器 LLM 用 tags 标记，跳过其输出（只输出真正的回答）
                 tags = event.get("tags") or []
-                if node_name in ("summarizer", "main") and "query_classifier" not in tags:
+                if node_name in ("summarizer", "intent_router") and "intent_classifier" not in tags:
                     chunk_content = event.get("data", {}).get("chunk", None)
                     if chunk_content and hasattr(chunk_content, "content") and chunk_content.content:
                         token = chunk_content.content
