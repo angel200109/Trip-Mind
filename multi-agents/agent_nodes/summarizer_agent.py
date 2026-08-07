@@ -57,15 +57,16 @@ async def summarizer_agent_node(state: GlobalState) -> Dict[str, Any]:
     # 从全局状态读取需要的信息
     user_query = state.get("user_query", "")
     
-    # 从 Planner 的上下文中获取信息
-    planner_context = state.get("planner_context") or {}
-    query_mode = planner_context.get("query_mode", "full") if planner_context else "full"
-    destination = planner_context.get("destination", "") if planner_context else ""
-    origin = planner_context.get("origin", "") if planner_context else ""
-    travel_days = planner_context.get("travel_days", 0) if planner_context else 0
-    budget = planner_context.get("budget", 0) if planner_context else 0
-    travel_date = planner_context.get("travel_date", "") if planner_context else ""
-    preferences = planner_context.get("preferences", []) if planner_context else []
+    # 从 intent_context 中获取信息
+    intent_context = state.get("intent_context") or {}
+    query_type = intent_context.get("query_type", "full_travel")
+    query_mode = "simple" if query_type == "simple_travel" else "full"
+    destination = intent_context.get("destination", "")
+    origin = intent_context.get("origin", "")
+    travel_days = intent_context.get("travel_days", 0)
+    budget = intent_context.get("budget", 0)
+    travel_date = intent_context.get("travel_date", "")
+    preferences = intent_context.get("preferences", [])
     
     # 从 Executor 的上下文中获取信息
     executor_context = state.get("executor_context") or {}
