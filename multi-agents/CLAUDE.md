@@ -31,27 +31,28 @@ python -c "from tools.rag_tool import get_rag_instance; get_rag_instance().build
 
 ### LangGraph 工作流 (`graph/workflow.py`)
 
-入口为 `main` 节点，根据查询分类（feedback / conversation / travel）路由：
+6 节点双路径架构，IntentRouter 统一入口：
 
 ```
-Main → Planner → Executor → Summarizer → final_output → END
-Main → Feedback → Main（循环）
-Main → final_output（对话类直接回答）
+IntentRouter → ReactExecutor → Summarizer → FinalOutput → END  (简单出行)
+IntentRouter → Planner → StepExecutor → Summarizer → FinalOutput → END  (旅游规划)
+IntentRouter → FinalOutput → END  (问候/追问直接回答)
 ```
 
 ### Agent 节点 (`agent_nodes/`)
 
 | 节点 | 职责 |
 |------|------|
-| `main_agent` | 协调者：查询分类 → 路由（planner / feedback / 直接回答） |
-| `planner_agent` | 提取旅行参数（目的地、日期、预算等），决定 query_mode |
-| `executor_agent` | **双模式执行**：simple → `create_react_agent` ReAct 循环；full → DeepSeek R1 制定计划后按步骤调用工具 |
-| `summarizer_agent` | 基于工具结果生成结构化旅行方案 |
-| `feedback_agent` | 分析用户偏好反馈，更新 `user_profile` |
+| `intent_router` | 三分类（greeting/simple_travel/full_travel）+ 参数提取 + 分级记忆加载 |
+| `react_executor` | ReAct 循环，LLM 自主决策工具调用（简单出行） |
+| `planner` | DeepSeek R1 生成 JSON 执行计划（旅游规划） |
+| `step_executor` | 按计划逐步调用工具，容错执行 |
+| `summarizer` | 汇总工具结果 + 用户偏好，生成最终回答 |
+| `final_output` | 记忆晋升（promote Q&A）、状态收尾 |
 
 ### 状态管理 (`graph/state.py`)
 
-`GlobalState` 中每个子 Agent 拥有独立上下文（`planner_context` / `executor_context` / `summarizer_context`），通过 `current_agent` + `next_agent` 控制流转。
+`GlobalState` 中各节点拥有独立上下文（`intent_context` / `executor_context` / `summarizer_context`），通过 `current_agent` + `is_complete` 控制流转。IntentRouter 通过条件边路由到三条路径。
 
 ### 工具层 (`tools/`)
 
