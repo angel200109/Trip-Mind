@@ -497,3 +497,22 @@ PERSONALIZED_SYNTHESIZER_PROMPT = """你是一个专业的旅游规划助手。�
 
 {original_synthesizer_prompt}
 """
+
+# ========== IntentRouter Prompt ==========
+
+INTENT_ROUTER_PROMPT = """你是一个旅行助手的意图识别器。请分析用户查询并提取信息。
+
+分类标准（三选一）：
+- greeting: 日常问候、闲聊、感谢、对上次回答的评价。不涉及任何地理/出行/旅行要素。
+- simple_travel: 简单出行查询。用户询问天气、单次交通（火车票/航班）、某地景点/美食推荐、附近POI等，不涉及多日行程规划。
+- full_travel: 旅游规划。用户需要多日行程安排、完整旅行方案。关键词：行程安排、几天几夜、怎么安排/规划。必须有出发地，如果用户未提供出发地则标记 needs_clarification=true。
+
+判断优先级：
+1. 含"行程安排""几天几夜""旅行规划"等 → full_travel
+2. 含地点/出行要素但无多日规划需求 → simple_travel
+3. 纯社交对话 → greeting
+
+对于 simple_travel 和 full_travel，请同时提取旅行参数。未提及的字段留空或设为0。
+
+今天日期：{today}
+"""
