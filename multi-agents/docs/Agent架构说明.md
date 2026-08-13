@@ -106,14 +106,14 @@ graph TD;
     ├─ query_mode=simple → create_react_agent（LangGraph 原生 ReAct）
     │     LLM 自主决定调哪些工具，tool calling 原生循环
     └─ query_mode=full → Plan-then-Execute
-          DeepSeek R1 生成计划 → 按步骤 tool.ainvoke(params) 执行
+          DeepSeek V4 生成计划 → 按步骤 tool.ainvoke(params) 执行
 ```
 
 **关键点：**
 - simple 模式用 `create_react_agent`（替代早期手写 ReAct 循环）：
   - `pre_model_hook` / `post_model_hook` 打印推理轮次与决策
   - `prompt` 参数注入系统提示（用户需求 + 工具建议）
-- full 模式：R1 规划 + 容错（某步失败不影响后续）
+- full 模式：V4 规划 + 容错（某步失败不影响后续）
 - 工具来自 `ToolProvider`（自动生成，无需手工定义 schema）
 
 ### 3.4 summarizer — 方案生成（`agent_nodes/summarizer_agent.py`）
@@ -286,7 +286,7 @@ ToolProvider（全局单例）
 
 [main]          加载记忆（偏好/历史）→ LLM 分类: travel
 [planner]       提取: 上海→杭州, 3天, 3000元 → query_mode=full
-[executor]      R1 制定计划 → 查天气/酒店/车票/黄历
+[executor]      V4 制定计划 → 查天气/酒店/车票/黄历
 [summarizer]    生成结构化旅行方案（含画像个性化）
 [final_output]  记忆写回: 偏好预算3000 → PG; 杭州 → travel_history
                 → final_answer 输出

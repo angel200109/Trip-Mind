@@ -258,7 +258,7 @@ SYNTHESIZER_PROMPT_TEMPLATE = """你是一个专业的旅游规划助手。请�
 风格：亲切、专业、实用，使用清晰的分隔符和 emoji 提高可读性。
 """
 
-R1_ANALYSIS_PROMPT_TEMPLATE = """你是一个旅行规划专家。请对以下旅行问题进行深度分析。
+V4_ANALYSIS_PROMPT_TEMPLATE = """你是一个旅行规划专家。请对以下旅行问题进行深度分析。
 
 问题：
 {problem}

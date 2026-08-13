@@ -12,7 +12,7 @@ PROJECT_ROOT = Path(__file__).parent.parent
 env_path = PROJECT_ROOT / ".env"
 load_dotenv(dotenv_path=env_path, override=True)
 
-# DeepSeek API配置（用于R1推理模型）
+# DeepSeek API配置（用于V4推理模型）
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 
@@ -28,8 +28,8 @@ LANGCHAIN_API_KEY = os.getenv("LANGCHAIN_API_KEY", "")
 QWEN3_MODEL = "qwen3.7-plus"  # 使用DashScope API
 QWEN3_TEMPERATURE = 0.7
 
-R1_MODEL = "deepseek-v4-flash"
-R1_TEMPERATURE = 0.1
+V4_MODEL = "deepseek-v4-flash"
+V4_TEMPERATURE = 0.1
 
 # Embedding模型 
 EMBEDDING_MODEL = "text-embedding-v3"

@@ -42,7 +42,7 @@ IntentRouter → FinalOutput → END  (问候/追问直接回答)
 |------|------|
 | `intent_router` | 三分类（greeting/simple_travel/full_travel）+ 参数提取 + 分级记忆加载 |
 | `react_executor` | ReAct 循环，LLM 自主决策工具调用（简单出行） |
-| `planner` | DeepSeek R1 生成 JSON 执行计划（旅游规划） |
+| `planner` | DeepSeek V4 生成 JSON 执行计划（旅游规划） |
 | `step_executor` | 按计划逐步调用工具，容错执行 |
 | `summarizer` | 汇总工具结果 + 用户偏好，生成最终回答 |
 | `final_output` | 记忆晋升（promote Q&A）、状态收尾 |
@@ -69,7 +69,7 @@ FastAPI 后端提供 SSE 流式对话端点 `POST /chatMessage/stream`。`chat_s
 
 - `.env` 文件存放 `DEEPSEEK_API_KEY`、`DASHSCOPE_API_KEY`、`LANGCHAIN_API_KEY` 等密钥。
 - `config/settings.py` 集中管理模型名称、温度、RAG 参数。
-- 执行模型：Qwen3（DashScope）用于规划/对话；DeepSeek R1 用于 Plan-then-Execute 的计划阶段。
+- 执行模型：Qwen3（DashScope）用于规划/对话；DeepSeek V4 用于 Plan-then-Execute 的计划阶段。
 
 ## Conventions
 
