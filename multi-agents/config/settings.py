@@ -36,10 +36,20 @@ EMBEDDING_MODEL = "text-embedding-v3"
 
 # RAG配置
 CHROMA_PERSIST_DIR = PROJECT_ROOT / "data" / "dataRAG" / "vectordb"
-RAG_CHUNK_SIZE = 500
-RAG_CHUNK_OVERLAP = 50
+RAG_CHUNK_SIZE = 800
+RAG_CHUNK_OVERLAP = 100
 RAG_SEARCH_K = 3
 RAG_BATCH_SIZE = 10  # ChromaDB批量载入大小，如遇到API限制可调小
+
+# RAG v2 新增配置
+RAG_RETRIEVE_K = 10              # rerank 前的候选数量
+RAG_BM25_WEIGHT = 0.5            # 混合检索中 BM25 权重
+RAG_VECTOR_WEIGHT = 0.5          # 混合检索中向量检索权重
+RAG_RERANK_MODEL = "gte-rerank"  # DashScope reranker 模型
+RAG_RERANK_TOP_N = 3             # rerank 后返回数量
+RAG_CONFIDENCE_THRESHOLD = 0.3   # 低于此阈值标记为低置信度
+RAG_ENABLE_QUERY_REWRITE = True  # 是否启用 query rewrite
+RAG_MULTI_QUERY_COUNT = 3        # multi-query 扩展数量
 
 # MCP配置
 MCP_CONFIG_PATH = str(PROJECT_ROOT / "config" / "servers_config.json")

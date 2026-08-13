@@ -8,6 +8,10 @@ langgraph>=0.1.0
 # 向量数据库
 chromadb>=0.5.0
 
+# RAG 混合检索
+rank-bm25>=0.2.2
+jieba>=0.42.1
+
 # LLM 提供商
 dashscope>=1.20.0  # Qwen
 openai>=1.0.0      # OpenAI API兼容

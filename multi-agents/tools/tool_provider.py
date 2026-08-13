@@ -134,18 +134,26 @@ class ToolProvider:
 
     def _create_rag_tool(self) -> BaseTool:
         @tool
-        async def rag_search(query: str = "", k: int = 3) -> str:
-            """
-            从知识库中检索旅游攻略和景点信息。
+        async def rag_search(query: str = "", k: int = 3, area: str = "", thrill_level: str = "") -> str:
+            """从知识库中检索旅游攻略和景点信息。
             当需要了解某个城市的旅游攻略、景点推荐、特色美食、最佳游玩时间等信息时使用。
+            可选过滤参数:
+            - area: 区域名称过滤（如"欢乐嘉年华","朋克奇境","尖叫地带","律动天地","丛林探险"）
+            - thrill_level: 刺激等级过滤（"刺激","温和","亲子"）
             """
-            return await query_travel_knowledge(query, k=k)
+            filters = {}
+            if area:
+                filters["area"] = area
+            if thrill_level:
+                filters["thrill_level"] = thrill_level
+            return await query_travel_knowledge(query, k=k, filters=filters or None)
 
         rag_search.name = "rag_search"
         rag_search.description = (
             "从知识库中检索旅游攻略和景点信息。"
             "当需要了解某个城市的旅游攻略、景点推荐、特色美食、最佳游玩时间等信息时使用。"
-            "参数: query(检索关键词，必需), k(返回结果数量，默认3)"
+            "参数: query(检索关键词), k(返回数量,默认3), "
+            "area(区域过滤,可选), thrill_level(刺激等级过滤:刺激/温和/亲子,可选)"
         )
         return rag_search
 
