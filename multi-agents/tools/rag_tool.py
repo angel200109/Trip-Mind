@@ -279,6 +279,13 @@ class TravelRAG:
         # 创建或更新向量数据库
         if force_recreate and os.path.exists(self.persist_directory):
             import shutil
+            if self.vector_store:
+                try:
+                    self.vector_store._client.close()
+                except Exception:
+                    pass
+                self.vector_store = None
+                self.retriever = None
             shutil.rmtree(self.persist_directory)
             self.imported_ids.clear()
         

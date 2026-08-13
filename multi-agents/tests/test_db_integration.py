@@ -24,7 +24,6 @@ async def setup_db():
     async with pool.acquire() as conn:
         await conn.execute("DELETE FROM chat_messages")
         await conn.execute("DELETE FROM conversation_summaries")
-        await conn.execute("DELETE FROM travel_history")
         await conn.execute("DELETE FROM chat_sessions")
         await conn.execute("DELETE FROM user_preferences")
     await close_db()
@@ -39,8 +38,7 @@ async def test_full_request_lifecycle():
     3. 更新会话标题（根据对话内容自动命名）
     4. 更新用户偏好
     5. 保存对话摘要
-    6. 保存旅行历史
-    7. 验证所有数据读取正确
+    6. 验证所有数据读取正确
     """
     from db import models
 
@@ -112,44 +110,16 @@ async def test_full_request_lifecycle():
     assert "出发地：上海" in summaries[0]["key_points"]
     assert summaries[0]["session_id"] == session_id
 
-    # ── Step 6: 保存旅行历史 ────────────────────────────────────
-    history_id = await models.save_travel_history(
-        user_id,
-        session_id,
-        destination="杭州",
-        origin="上海",
-        travel_date="2026-10-01",
-        travel_days=3,
-        budget=2000.0,
-        plan_summary="西湖+灵隐寺+古镇三日游",
-        status="planned",
-    )
-    assert history_id > 0
+    # ── Step 6: 验证跨表数据一致性 ──────────────────────────────
+    # 同一个 session_id 串联了消息和摘要
+    assert summaries[0]["session_id"] == session_id
 
-    history = await models.get_travel_history(user_id)
-    assert len(history) == 1
-    record = history[0]
-    assert record["destination"] == "杭州"
-    assert record["origin"] == "上海"
-    assert record["travel_days"] == 3
-    assert float(record["budget"]) == 2000.0
-    assert record["plan_summary"] == "西湖+灵隐寺+古镇三日游"
-    assert record["status"] == "planned"
-    assert record["session_id"] == session_id
-
-    # ── Step 7: 验证跨表数据一致性 ──────────────────────────────
-    # 同一个 session_id 串联了消息、摘要、旅行历史
-    assert summaries[0]["session_id"] == record["session_id"] == session_id
-
-    # 删除会话后，消息应级联清除，但摘要和旅行历史保留
+    # 删除会话后，消息应级联清除，但摘要保留
     await models.delete_session(session_id)
 
     msgs_after_delete = await models.get_session_messages(session_id)
     assert len(msgs_after_delete) == 0
 
-    # 摘要和旅行历史不依赖会话外键，仍可读取
+    # 摘要不依赖会话外键，仍可读取
     summaries_still = await models.get_user_summaries(user_id)
     assert len(summaries_still) == 1
-
-    history_still = await models.get_travel_history(user_id)
-    assert len(history_still) == 1

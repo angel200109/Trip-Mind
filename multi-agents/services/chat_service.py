@@ -3,7 +3,7 @@ import uuid
 import json
 from typing import AsyncGenerator, Optional, Dict, Any, List
 
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from graph.workflow import travel_graph
 from graph.state import GlobalState
 from schemas.models import ChatRequest
@@ -59,7 +59,9 @@ def build_state_from_messages(messages: List[dict], pg_session_id: Optional[str]
         # 跳过 progress 占位消息
         if role == "assistant" and (not content or msg.get("progress")):
             continue
-        if role == "user":
+        if role == "system" and content:
+            langchain_messages.append(SystemMessage(content=content))
+        elif role == "user":
             if isinstance(content, list):
                 # 多模态消息，取文本部分
                 text = next((c.get("text", "") for c in content if c.get("type") == "text"), "")
@@ -194,6 +196,14 @@ async def stream_chat(request: ChatRequest) -> AsyncGenerator[str, None]:
 
     print(f"[stream_chat] user_query={user_query}", flush=True)
     print(f"[stream_chat] 历史 {len(history_messages)} 条（重新生成={is_regenerate}）", flush=True)
+
+    # 2.5 上下文压缩（超过阈值时压缩旧消息，对 graph 透明）
+    from services.context_compression_service import compress_if_needed
+    history_messages = await compress_if_needed(
+        session_id=conversation_id,
+        all_messages=history_messages,
+        user_id="default_user",
+    )
 
     # 3. 构建 state 并执行 graph（带上 PG 会话 ID 供记忆写回）
     state = build_state_from_messages(history_messages, pg_session_id=conversation_id)

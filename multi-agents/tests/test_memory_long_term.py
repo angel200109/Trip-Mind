@@ -60,23 +60,6 @@ async def test_update_preferences(memory):
 
 
 # ---------------------------------------------------------------------------
-# get_travel_history
-# ---------------------------------------------------------------------------
-
-@pytest.mark.asyncio
-async def test_get_travel_history(memory):
-    """应将结果原样透传"""
-    fake_history = [
-        {"id": 1, "destination": "北京", "status": "completed"},
-        {"id": 2, "destination": "上海", "status": "planned"},
-    ]
-    with patch("memory.long_term.db_get_travel_history", new=AsyncMock(return_value=fake_history)):
-        result = await memory.get_travel_history("u1", limit=5)
-
-    assert result == fake_history
-
-
-# ---------------------------------------------------------------------------
 # get_summaries
 # ---------------------------------------------------------------------------
 
@@ -129,22 +112,17 @@ async def test_search_knowledge_not_initialized(memory):
 
 @pytest.mark.asyncio
 async def test_get_user_profile(memory):
-    """应聚合偏好、旅行历史、摘要到同一个 dict"""
+    """应聚合偏好、摘要到同一个 dict"""
     fake_prefs = {"preferred_style": "自由行"}
-    fake_history = [{"destination": "成都"}]
     fake_summaries = [{"summary": "计划了成都旅行"}]
 
-    # patch the three DB functions used by the underlying methods
     with (
         patch("memory.long_term.db_get_preferences", new=AsyncMock(return_value={**fake_prefs, "user_id": "u1", "updated_at": "x"})),
-        patch("memory.long_term.db_get_travel_history", new=AsyncMock(return_value=fake_history)),
         patch("memory.long_term.db_get_user_summaries", new=AsyncMock(return_value=fake_summaries)),
     ):
         profile = await memory.get_user_profile("u1")
 
     assert "preferences" in profile
-    assert "travel_history" in profile
     assert "summaries" in profile
     assert profile["preferences"]["preferred_style"] == "自由行"
-    assert profile["travel_history"] == fake_history
     assert profile["summaries"] == fake_summaries

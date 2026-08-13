@@ -6,7 +6,6 @@
 - 短期记忆：session 已有历史时读取
 - 长期记忆：
     - 偏好：总是加载（画像读取唯一入口，PG 单行成本低）
-    - 旅行历史：query 含 "上次"/"去过" 等回顾性词汇时加载
     - 知识库：query 含攻略/景点/推荐等信息检索词汇时加载
 """
 from __future__ import annotations
@@ -19,8 +18,7 @@ if TYPE_CHECKING:
     from .short_term import ShortTermMemory
     from .long_term import LongTermMemory
 
-# ── 意图关键词正则（仅用于历史/知识库） ──────────────────────────────────────
-_HIST_PATTERN = re.compile(r"上次|之前|去过|历史|以前|曾经|类似|同样|像上回")
+# ── 意图关键词正则 ──────────────────────────────────────────────────────────
 _KNOW_PATTERN = re.compile(r"攻略|景点|美食|推荐|交通|天气|路线|怎么去|哪里好玩|门票|住哪|吃什么")
 
 
@@ -30,7 +28,7 @@ class MemoryRouter:
     - 工作记忆：始终读取
     - 短期记忆：session 已有历史时读取
     - 偏好：总是加载
-    - 旅行历史/知识库：按关键词按需加载
+    - 知识库：按关键词按需加载
     """
 
     def __init__(
@@ -60,24 +58,13 @@ class MemoryRouter:
         # 3. 长期记忆：偏好总是加载（PG 单行读取成本低，作为画像唯一入口）
         context["preferences"] = await self.long_term.get_preferences(user_id)
 
-        # 旅行历史 / 知识库：按关键词按需加载（成本更高）
-        needs_hist = self._needs_history(user_query)
-        needs_know = self._needs_knowledge(user_query)
-
-        if needs_hist:
-            context["travel_history"] = await self.long_term.get_travel_history(
-                user_id, limit=5
-            )
-        if needs_know:
+        # 知识库：按关键词按需加载
+        if self._needs_knowledge(user_query):
             context["knowledge"] = await self.long_term.search_knowledge(user_query)
 
         return context
 
     # ── 意图判断 ──────────────────────────────────────────────────────────────
-
-    def _needs_history(self, query: str) -> bool:
-        """判断是否需要加载旅行历史"""
-        return bool(_HIST_PATTERN.search(query))
 
     def _needs_knowledge(self, query: str) -> bool:
         """判断是否需要检索知识库"""

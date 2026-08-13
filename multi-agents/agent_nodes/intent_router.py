@@ -116,17 +116,6 @@ def _detect_multi_destination(user_query: str, destination: str, origin: str) ->
 
 
 # ---------------------------------------------------------------------------
-# 关键词：是否需要加载旅行历史
-# ---------------------------------------------------------------------------
-
-_HISTORY_KEYWORDS = ["上次", "去过", "之前", "以前", "曾经", "上回"]
-
-
-def _needs_travel_history(user_query: str) -> bool:
-    return any(kw in user_query for kw in _HISTORY_KEYWORDS)
-
-
-# ---------------------------------------------------------------------------
 # 主节点函数
 # ---------------------------------------------------------------------------
 
@@ -219,7 +208,6 @@ async def intent_router_node(state: GlobalState) -> Dict[str, Any]:
     # Step 4: 按分类按需加载长期记忆
     # ------------------------------------------------------------------
     preferences: dict = {}
-    travel_history: list = []
 
     if query_type in ("simple_travel", "full_travel") and user_id:
         try:
@@ -228,18 +216,10 @@ async def intent_router_node(state: GlobalState) -> Dict[str, Any]:
             print(f"⚠️ 偏好加载失败: {exc}")
             preferences = {}
 
-        if _needs_travel_history(user_query) and user_id:
-            try:
-                travel_history = await mem.long_term.get_travel_history(user_id, limit=5)
-            except Exception as exc:
-                print(f"⚠️ 旅行历史加载失败: {exc}")
-                travel_history = []
-
     memory_context: Dict[str, Any] = {
         "working": working_ctx,
         "short_history": short_history,
         "preferences": preferences,
-        "travel_history": travel_history,
     }
 
     # ------------------------------------------------------------------

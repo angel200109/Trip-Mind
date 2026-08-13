@@ -12,9 +12,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # 安装依赖
 pip install -r requirements.txt
 
-# 运行 Streamlit UI（前端独立界面）
-streamlit run app.py
-
 # 运行 FastAPI 后端（供前端 SPA 调用）
 python server.py              # 默认 0.0.0.0:8000
 uvicorn server:app --reload   # 等价

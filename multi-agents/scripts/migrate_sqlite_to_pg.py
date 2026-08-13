@@ -1,5 +1,8 @@
 """
-SQLite → PostgreSQL 数据迁移脚本
+[已废弃] SQLite → PostgreSQL 数据迁移脚本
+
+注意：此脚本依赖已删除的 chat_history_manager.py（SQLite 旧方案），
+仅保留作为历史参考，不可直接运行。
 
 把现有 SQLite 中的会话和消息迁移到 PostgreSQL。
 - 会话 ID 用确定性 UUID（uuid5），迁移可重复执行（幂等）

@@ -4,7 +4,6 @@
 写回 pipeline:
 1. 用户消息 + 助手回复 → Redis 短期记忆（热缓存）
 2. 检测偏好变化（正则快路径 → LLM 兜底）→ 更新 PG user_preferences
-3. 检测旅行计划完成 → 写入 PG travel_history
 （聊天消息由 chat_service 统一持久化，promote 不重复保存）
 """
 from __future__ import annotations
@@ -28,7 +27,6 @@ class MemoryPromotion:
     写回 pipeline:
     1. 用户消息 + 助手回复 → Redis 短期记忆（热缓存）
     2. 检测偏好变化（正则快路径 → LLM 兜底，5s 超时）→ 更新 PG user_preferences
-    3. 检测旅行计划完成 → 写入 PG travel_history
     """
 
     def __init__(
@@ -54,16 +52,13 @@ class MemoryPromotion:
 
         Returns: dict with keys indicating what was promoted:
             {
-                "saved_to_pg": bool,
                 "saved_to_short_term": bool,
                 "preferences_updated": bool,
-                "travel_history_saved": bool,
             }
         """
         result = {
             "saved_to_short_term": False,
             "preferences_updated": False,
-            "travel_history_saved": False,
         }
 
         # 说明：聊天消息（user/assistant）不在这里保存——
@@ -95,16 +90,6 @@ class MemoryPromotion:
         if preferences:
             await self.long_term.update_preferences(user_id, **preferences)
             result["preferences_updated"] = True
-
-        # 3. 检测旅行计划
-        travel_info = self._extract_travel_info(user_message, assistant_response)
-        if travel_info and pg_session_id:
-            await models.save_travel_history(
-                user_id=user_id,
-                session_id=pg_session_id,
-                **travel_info,
-            )
-            result["travel_history_saved"] = True
 
         return result
 
@@ -151,45 +136,6 @@ class MemoryPromotion:
 
         return fields
 
-    def _extract_travel_info(self, user_msg: str, assistant_msg: str) -> dict:
-        """
-        从对话中提取旅行计划信息。
-        只在助手回复中明确包含行程规划内容时触发。
-        返回可传给 save_travel_history 的 dict，无发现返回空 dict。
-        """
-        info = {}
-
-        # 只在助手回复包含行程规划标志时触发
-        plan_indicators = ["行程安排", "日程安排", "行程规划", "Day ", "第一天", "第1天"]
-        if not any(indicator in assistant_msg for indicator in plan_indicators):
-            return {}
-
-        # 目的地提取
-        dest_match = re.search(r'(?:去|到|游|玩)([一-鿿]{2,5})', user_msg)
-        if dest_match:
-            info["destination"] = dest_match.group(1)
-
-        # 天数提取
-        days_match = re.search(r'(\d+)\s*[天日]', user_msg)
-        if days_match:
-            info["travel_days"] = int(days_match.group(1))
-
-        # 预算提取
-        budget_match = re.search(r'预算[大概约是]?(\d+)', user_msg)
-        if budget_match:
-            info["budget"] = float(budget_match.group(1))
-
-        # 出发地提取
-        origin_match = re.search(r'从([一-鿿]{2,5})(?:出发|去|到)', user_msg)
-        if origin_match:
-            info["origin"] = origin_match.group(1)
-
-        if info.get("destination"):
-            info["status"] = "planned"
-            return info
-
-        return {}
-
     async def save_summary(
         self,
         session_id: str,
@@ -198,5 +144,5 @@ class MemoryPromotion:
         summary: str,
         key_points: list[str],
     ) -> None:
-        """保存对话摘要到长期记忆（由 ContextCompressor 调用后执行）"""
+        """保存对话摘要到长期记忆"""
         await models.save_summary(user_id, pg_session_id, summary, key_points)

@@ -20,7 +20,6 @@ async def setup_db():
     async with pool.acquire() as conn:
         await conn.execute("DELETE FROM chat_messages")
         await conn.execute("DELETE FROM conversation_summaries")
-        await conn.execute("DELETE FROM travel_history")
         await conn.execute("DELETE FROM chat_sessions")
         await conn.execute("DELETE FROM user_preferences")
     await close_db()
@@ -172,60 +171,3 @@ async def test_save_and_get_summary():
 
     summaries2 = await get_user_summaries("summary_user")
     assert len(summaries2) == 2
-
-
-# ============================================================
-# travel_history
-# ============================================================
-
-@pytest.mark.asyncio
-async def test_save_and_get_travel_history():
-    """测试保存和获取旅行历史"""
-    from db.models import create_session, save_travel_history, get_travel_history
-
-    session_id = await create_session("travel_user", "旅行记录测试")
-
-    record_id = await save_travel_history(
-        "travel_user",
-        session_id,
-        destination="杭州",
-        origin="上海",
-        travel_date="2026-10-01",
-        travel_days=3,
-        budget=2000.0,
-        plan_summary="西湖+灵隐寺两日游",
-        status="planned",
-    )
-    assert record_id > 0
-
-    history = await get_travel_history("travel_user")
-    assert len(history) == 1
-    record = history[0]
-    assert record["destination"] == "杭州"
-    assert record["origin"] == "上海"
-    assert record["travel_days"] == 3
-    assert float(record["budget"]) == 2000.0
-    assert record["plan_summary"] == "西湖+灵隐寺两日游"
-    assert record["status"] == "planned"
-
-
-@pytest.mark.asyncio
-async def test_travel_history_limit():
-    """测试 get_travel_history 的 limit 参数"""
-    from db.models import create_session, save_travel_history, get_travel_history
-
-    session_id = await create_session("limit_user", "limit测试")
-
-    for i in range(5):
-        await save_travel_history(
-            "limit_user",
-            session_id,
-            destination=f"目的地{i}",
-            status="planned",
-        )
-
-    all_records = await get_travel_history("limit_user", limit=10)
-    assert len(all_records) == 5
-
-    limited = await get_travel_history("limit_user", limit=3)
-    assert len(limited) == 3

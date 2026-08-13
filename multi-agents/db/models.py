@@ -291,19 +291,45 @@ async def save_summary(
     session_id: uuid.UUID,
     summary: str,
     key_points: Optional[list[str]] = None,
+    metadata: Optional[dict] = None,
 ) -> int:
-    """保存对话摘要"""
+    """保存对话摘要（支持压缩元数据）"""
     pool = get_pool()
+    import json as _json
+    metadata_json = _json.dumps(metadata) if metadata else "{}"
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """
-            INSERT INTO conversation_summaries (user_id, session_id, summary, key_points)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO conversation_summaries (user_id, session_id, summary, key_points, metadata)
+            VALUES ($1, $2, $3, $4, $5::jsonb)
             RETURNING id
             """,
-            user_id, session_id, summary, key_points or [],
+            user_id, session_id, summary, key_points or [], metadata_json,
         )
         return row["id"]
+
+
+async def get_session_summary(session_id: uuid.UUID) -> Optional[dict[str, Any]]:
+    """获取指定会话的最新压缩摘要"""
+    pool = get_pool()
+    import json as _json
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT id, user_id, session_id, summary, key_points, metadata, created_at
+            FROM conversation_summaries
+            WHERE session_id = $1
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            session_id,
+        )
+        if row:
+            result = dict(row)
+            if result.get("metadata") and isinstance(result["metadata"], str):
+                result["metadata"] = _json.loads(result["metadata"])
+            return result
+        return None
 
 
 async def get_user_summaries(user_id: str, limit: int = 10) -> list[dict[str, Any]]:
@@ -322,61 +348,3 @@ async def get_user_summaries(user_id: str, limit: int = 10) -> list[dict[str, An
         )
         return [dict(row) for row in rows]
 
-
-# ============================================================
-# travel_history
-# ============================================================
-
-async def save_travel_history(
-    user_id: str,
-    session_id: uuid.UUID,
-    destination: Optional[str] = None,
-    origin: Optional[str] = None,
-    travel_date: Optional[str] = None,
-    travel_days: Optional[int] = None,
-    budget: Optional[float] = None,
-    plan_summary: Optional[str] = None,
-    status: str = "planned",
-) -> int:
-    """保存旅行历史记录"""
-    pool = get_pool()
-    from datetime import date as date_type
-
-    travel_date_parsed = None
-    if travel_date:
-        try:
-            travel_date_parsed = date_type.fromisoformat(travel_date)
-        except ValueError:
-            pass
-
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """
-            INSERT INTO travel_history
-                (user_id, session_id, destination, origin, travel_date,
-                 travel_days, budget, plan_summary, status)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            RETURNING id
-            """,
-            user_id, session_id, destination, origin, travel_date_parsed,
-            travel_days, budget, plan_summary, status,
-        )
-        return row["id"]
-
-
-async def get_travel_history(user_id: str, limit: int = 10) -> list[dict[str, Any]]:
-    """获取用户旅行历史"""
-    pool = get_pool()
-    async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            """
-            SELECT id, user_id, session_id, destination, origin,
-                   travel_date, travel_days, budget, plan_summary, status, created_at
-            FROM travel_history
-            WHERE user_id = $1
-            ORDER BY created_at DESC
-            LIMIT $2
-            """,
-            user_id, limit,
-        )
-        return [dict(row) for row in rows]

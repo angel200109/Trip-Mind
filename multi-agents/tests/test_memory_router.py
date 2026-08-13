@@ -22,7 +22,6 @@ def _make_router(
     working_context: dict | None = None,
     short_history: list | None = None,
     preferences: dict | None = None,
-    travel_history: list | None = None,
     knowledge: str = "some knowledge",
 ) -> MemoryRouter:
     """Build a MemoryRouter with fully-mocked memory layers."""
@@ -37,9 +36,6 @@ def _make_router(
     long_term = MagicMock()
     long_term.get_preferences = AsyncMock(
         return_value=preferences if preferences is not None else {"budget": "high"}
-    )
-    long_term.get_travel_history = AsyncMock(
-        return_value=travel_history if travel_history is not None else [{"city": "Beijing"}]
     )
     long_term.search_knowledge = AsyncMock(return_value=knowledge)
 
@@ -92,17 +88,7 @@ class TestMemoryRouter(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["preferences"], {"style": "quiet"})
         router.long_term.get_preferences.assert_awaited_once_with("u1")
 
-    # ── 5. 历史关键词 ────────────────────────────────────────────────────────
-
-    async def test_loads_history_on_keyword(self):
-        """Query with a history keyword should trigger travel_history load."""
-        router = _make_router(travel_history=[{"city": "Hangzhou"}])
-        result = await router.load_context("s1", "u1", "上次去杭州怎么样")
-        self.assertIn("travel_history", result)
-        self.assertEqual(result["travel_history"], [{"city": "Hangzhou"}])
-        router.long_term.get_travel_history.assert_awaited_once_with("u1", limit=5)
-
-    # ── 6. 知识库关键词 ──────────────────────────────────────────────────────
+    # ── 5. 知识库关键词 ──────────────────────────────────────────────────────
 
     async def test_loads_knowledge_on_keyword(self):
         """Query with a knowledge keyword should trigger knowledge search."""
@@ -123,16 +109,14 @@ class TestMemoryRouter(unittest.IsolatedAsyncioTestCase):
         self.assertIn("preferences", result)
         router.long_term.get_preferences.assert_awaited_once_with("u1")
 
-    # ── 8. 多意图 ────────────────────────────────────────────────────────────
+    # ── 7. 多意图 ────────────────────────────────────────────────────────────
 
     async def test_multiple_intents(self):
-        """A query matching both history and knowledge keywords should load both layers."""
-        query = "之前去过杭州，这次想去类似的景点"
+        """A query matching knowledge keywords should load knowledge layer."""
+        query = "杭州有什么景点推荐"
         router = _make_router()
         result = await router.load_context("s1", "u1", query)
-        self.assertIn("travel_history", result)
         self.assertIn("knowledge", result)
-        router.long_term.get_travel_history.assert_awaited_once_with("u1", limit=5)
         router.long_term.search_knowledge.assert_awaited_once_with(query)
 
 

@@ -55,7 +55,6 @@ async def test_tables_created():
         assert "chat_messages" in table_names
         assert "user_preferences" in table_names
         assert "conversation_summaries" in table_names
-        assert "travel_history" in table_names
         assert "schema_migrations" in table_names
 
     await close_db()
