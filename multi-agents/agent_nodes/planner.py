@@ -1,6 +1,6 @@
 """
 Planner 节点 — 独立规划阶段（仅生成JSON计划，不执行工具）
-使用 DeepSeek R1 为 full_travel 查询生成执行计划
+使用 DeepSeek V4 为 full_travel 查询生成执行计划
 """
 import json
 from typing import Dict, Any
@@ -9,7 +9,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
 
 from config.settings import (
-    R1_MODEL, DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, R1_TEMPERATURE
+    V4_MODEL, DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, V4_TEMPERATURE
 )
 from graph.state import GlobalState
 from tools.tool_provider import get_tool_provider
@@ -23,7 +23,7 @@ async def planner_node(state: GlobalState) -> Dict[str, Any]:
     1. 从 state["intent_context"] 读取旅行参数（destination, origin, travel_days, budget, travel_date, preferences）
     2. 从 state["user_query"] 读取用户查询
     3. 获取 tool_provider.get_tool_map() 的所有工具名
-    4. 用 DeepSeek R1 输出 JSON 格式的查询计划
+    4. 用 DeepSeek V4 输出 JSON 格式的查询计划
     5. 解析 JSON（处理 markdown code block 包裹）
     6. 如果解析失败，提供 fallback 默认计划（rag_search + gaode_weather）
     7. 将 plan_steps 存入 executor_context
@@ -63,12 +63,12 @@ async def planner_node(state: GlobalState) -> Dict[str, Any]:
 
     print(f"📦 可用工具: {available_tools}")
 
-    # 创建 DeepSeek R1 LLM 实例
-    r1_llm = ChatOpenAI(
-        model=R1_MODEL,
+    # 创建 DeepSeek V4 LLM 实例
+    v4_llm = ChatOpenAI(
+        model=V4_MODEL,
         base_url=DEEPSEEK_BASE_URL,
         api_key=DEEPSEEK_API_KEY,
-        temperature=R1_TEMPERATURE
+        temperature=V4_TEMPERATURE
     )
 
     # 构建 prompt
@@ -103,11 +103,11 @@ async def planner_node(state: GlobalState) -> Dict[str, Any]:
 """
 
     try:
-        print(f"\n🧠 DeepSeek R1 开始制定计划...")
-        response = await r1_llm.ainvoke([HumanMessage(content=problem)])
+        print(f"\n🧠 DeepSeek V4 开始制定计划...")
+        response = await v4_llm.ainvoke([HumanMessage(content=problem)])
         content = response.content.strip()
 
-        print(f"\n📋 R1 返回原始内容（前200字符）:")
+        print(f"\n📋 V4 返回原始内容（前200字符）:")
         print(content[:200])
 
         # 处理 markdown code block 包裹

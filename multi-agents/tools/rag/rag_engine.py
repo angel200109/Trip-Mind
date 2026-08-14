@@ -327,14 +327,28 @@ class TravelRAG:
 
         # 强制重建时清除旧库
         if force_recreate and os.path.exists(self.persist_directory):
+            import gc
             import shutil
+            import time
             if self.vector_store:
                 try:
                     self.vector_store._client.close()
                 except Exception:
                     pass
                 self.vector_store = None
-            shutil.rmtree(self.persist_directory)
+            gc.collect()  # 释放引用，便于 SQLite 句柄关闭 (Windows)
+            # Windows 下 Chroma 的 sqlite 句柄可能延迟释放，带重试删除
+            for attempt in range(5):
+                try:
+                    shutil.rmtree(self.persist_directory)
+                    break
+                except PermissionError:
+                    if attempt == 4:
+                        raise PermissionError(
+                            f"无法删除旧向量库 {self.persist_directory}：文件被其他进程占用。\n"
+                            f"请先停止占用该文件的进程（如运行中的 server.py / uvicorn / Jupyter），再重试。"
+                        ) from None
+                    time.sleep(1)
             self.imported_ids.clear()
 
         # 批量入库 ChromaDB
