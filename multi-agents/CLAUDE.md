@@ -20,8 +20,8 @@ uvicorn server:app --reload   # 等价
 python -m pytest tests/
 python -m unittest tests/test_train_query_parsing.py   # 单个测试
 
-# 构建 RAG 知识库（首次部署或文档更新后）
-python -c "from tools.rag_tool import get_rag_instance; get_rag_instance().build_knowledge_base('data/dataRAG/docs')"
+# 构建 RAG 知识库（首次部署或 citydata 更新后）
+python scripts/rebuild_kb.py
 ```
 
 ## Architecture

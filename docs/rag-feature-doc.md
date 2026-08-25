@@ -49,22 +49,22 @@ Agent 节点使用检索结果生成回答
 | RAG Engine | `tools/rag/rag_engine.py` | 编排整个 pipeline，对外提供统一接口 |
 | Query Transformer | `tools/rag/query_transformer.py` | LLM 多角度查询扩展 |
 | Hybrid Retriever | `tools/rag/retriever.py` | BM25 + Vector 混合检索 + RRF 融合 |
-| Reranker | `tools/rag/reranker.py` | DashScope gte-rerank 精排 |
-| Chunker | `tools/rag/chunker.py` | 通用文档切分 + LLM 元数据抽取 |
+| Reranker | `tools/rag/reranker.py` | DashScope qwen3-rerank 精排 |
+| Chunker | `tools/rag/chunker.py` | citydata 景点文档切分 |
 
 ### 4. LLM / Tool / RAG / Memory 分工
 
-- **LLM (Qwen3)**：Query 扩展、元数据抽取（构建时）
+- **LLM (Qwen3)**：Query 扩展
 - **Embedding (DashScope)**：文档向量化，ChromaDB 存储
 - **BM25 (rank_bm25 + jieba)**：中文关键词精确匹配
-- **Reranker (DashScope gte-rerank)**：Cross-encoder 精排
+- **Reranker (DashScope qwen3-rerank)**：Cross-encoder 精排
 - **ChromaDB**：向量持久化存储，支持 metadata 过滤
 
 ### 5. 数据流
 
 ```
 构建阶段:
-  原始文档 → load_documents → chunk_documents → LLM 元数据抽取 → ChromaDB 入库 + BM25 索引
+  citydata CSV → 景点 Document → chunk_documents → Embedding → ChromaDB 入库 + BM25 索引
 
 检索阶段:
   用户 query → expand_queries (LLM生成N个变体)

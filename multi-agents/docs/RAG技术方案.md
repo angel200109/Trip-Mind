@@ -1,279 +1,327 @@
-# RAG 知识检索系统技术方案
-
-> 版本: v2（混合检索 + Rerank）| 代码位置: `tools/rag/` | 更新时间: 2026-08
-
-## 目录
-
-1. [架构设计](#一架构设计)
-2. [细节实现](#二细节实现)
-3. [关键设计决策](#三关键设计决策)
-4. [后续完善方向](#四后续完善方向)
-5. [面试话术](#五面试话术)
-
----
+# Citydata Chunk RAG 技术方案
 
 ## 一、架构设计
 
 ### 1.1 系统定位
 
-RAG 为多 Agent 旅行规划系统提供**本地旅游攻略知识检索**能力。用户问题（如"长隆有哪些刺激的项目？"）先经 LLM 改写扩展，再从攻略知识库中召回相关内容，作为上下文注入 Agent 的推理。
+本项目的 RAG 用于景点攻略类问答。检索对象不是“一个城市一个文档”，而是 `citydata/` 目录中景点 CSV 记录经过切片后形成的 chunk。
 
-RAG 以 **`rag_search` 工具**的形式接入 LangGraph Agent（`tool_provider.py`），支持 `area`（区域）、`thrill_level`（刺激等级）元数据过滤。
+系统主要解决两类问题：
 
-### 1.2 演进历程
+- 根据景点名称查询地址、开放信息、特色和游玩攻略。
+- 根据游玩需求查询相关景点攻略片段，并将检索结果交给 LLM 组织答案。
 
-| 版本 | 结构 | 检索方式 | 问题 |
-|------|------|----------|------|
-| v1 | 单文件 `rag_tool.py` (~450行) | 纯向量检索 (ChromaDB + text-embedding-v3) | 只召回语义相近文档；专有名词/精确词命中差；单文件难维护 |
-| v2 | `tools/rag/` 五模块包 | 查询改写 → 混合检索(BM25+向量, RRF) → rerank 精排 | — |
+当前 RAG 本身只负责知识检索和结果整理，不负责生成最终回答。
 
-v2 核心目标：**提高召回率（混合检索）与排序准确率（rerank）**，同时保持对外接口不变（`rag_tool.py` 保留为兼容 shim）。
+### 1.2 总体流程
 
-### 1.3 整体架构
+#### 离线建库
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                       用户查询 (query)                        │
-│  "长隆欢乐世界有哪些刺激的过山车项目？"                         │
-└──────────────────────────┬──────────────────────────────────┘
-                           ▼
-              ┌──────────────────────────┐
-              │  QueryTransformer        │  ① 查询改写与扩展
-              │  LLM 改写 + multi-query  │     生成 3 个查询变体
-              └──────────────────────────┘
-                           ▼
-              ┌──────────────────────────┐
-              │  HybridRetriever         │  ② 混合检索 (候选 k=10)
-              │  BM25 (jieba)  ──┐       │
-              │                 ├─ RRF ──┤   BM25 命中精确词
-              │  ChromaDB 向量 ──┘       │   向量命中语义相关
-              │  (支持 metadata 过滤)     │
-              └──────────────────────────┘
-                           ▼
-              ┌──────────────────────────┐
-              │  DashScopeReranker       │  ③ 精排 (top_n=3)
-              │  gte-rerank API          │   置信度阈值 0.3
-              └──────────────────────────┘
-                           ▼
-              ┌──────────────────────────┐
-              │  格式化输出               │  ④ 来源/区域/刺激等级/相关度
-              │  注入 Agent 上下文        │   低置信度标记
-              └──────────────────────────┘
+```text
+citydata/*.csv
+    ↓
+读取完整景点记录
+    ↓
+生成 LangChain Document
+    ↓
+按 800 字符切片，重叠 100 字符
+    ↓
+为每个 chunk 生成稳定唯一的 chunk_id
+    ↓
+调用 qwen3.7-text-embedding
+    ↓
+写入 ChromaDB
+    ↓
+在运行时从 ChromaDB 文档重建 BM25 索引
 ```
 
-### 1.4 模块划分
+#### 在线检索
 
+```text
+用户问题
+    ↓
+LLM 多角度 Query 扩展，最多生成 3 个查询
+    ↓
+向量检索 + BM25 检索
+    ↓
+RRF 融合，得到最多 10 个候选 chunk
+    ↓
+qwen3-rerank 重排序
+    ↓
+返回最多 5 个 chunk
+    ↓
+后续回答模块将 chunk 内容交给 LLM
 ```
-tools/rag/
-├── __init__.py          # 对外导出 + get_rag_instance() 单例
-├── chunker.py           # 文档切分 + LLM 批量元数据抽取（构建时）
-├── query_transformer.py # 查询改写 + multi-query 扩展（查询时）
-├── retriever.py         # 混合检索: BM25 + 向量 + RRF 融合
-├── reranker.py          # DashScope gte-rerank 重排序
-└── rag_engine.py        # TravelRAG 编排器: 加载/构建/检索主入口
-```
 
-依赖关系：`rag_engine` 组合四个子组件；子组件之间互不依赖；`rag_engine` 对外暴露 `TravelRAG` / `search()` / `build_knowledge_base()`。
+### 1.3 主要模块
 
-### 1.5 构建链路（离线）与查询链路（在线）分离
+| 模块 | 文件 | 作用 |
+| --- | --- | --- |
+| 建库脚本 | `scripts/rebuild_kb.py` | 读取 citydata、切片、Embedding、写入 ChromaDB |
+| CSV 加载 | `tools/rag/citydata_loader.py` | 将完整景点记录转换为原始 Document |
+| 文档切片 | `tools/rag/chunker.py` | 使用 RecursiveCharacterTextSplitter 切分文本 |
+| 向量存储 | `tools/rag/embedding.py`、ChromaDB | 保存向量、原文和元数据 |
+| 混合检索 | `tools/rag/retriever.py` | 执行向量检索、BM25 和 RRF 融合 |
+| Query 扩展 | `tools/rag/query_transformer.py` | 生成多个检索角度 |
+| 重排序 | `tools/rag/dashscope_reranker.py` | 使用 qwen3-rerank 对候选 chunk 精排 |
+| RAG 主入口 | `tools/rag/rag_engine.py` | 串联查询扩展、召回、重排序并返回结果 |
+| 评测脚本 | `tests/eval_rag_chunk.py` | 按 chunk_id 评测检索质量 |
 
-| | 构建链路 `build_knowledge_base()` | 查询链路 `search()` |
-|---|---|---|
-| 时机 | 文档更新后手动触发 | Agent 运行时实时调用 |
-| 流程 | 加载 → 切分 → **LLM 抽元数据** → ChromaDB 入库 → 建 BM25 索引 | 改写扩展 → 混合检索 → rerank → 格式化 |
-| 成本 | 高（LLM 批量调用 + embedding） | 低（一次 LLM 改写 + 两次检索 + 一次 rerank） |
+### 1.4 数据与文档模型
 
----
+每条完整的 CSV 景点记录先生成一个原始 `Document`，再被切成一个或多个 chunk。一个景点不一定只有一个 chunk，文本长度超过切片阈值时会产生多个 chunk。
+
+每个 chunk 至少包含：
+
+- `page_content`：当前切片的文本内容。
+- `metadata.chunk_id`：chunk 的唯一标识，用于 Chroma、去重和评测。
+- `metadata.spot_name`：景点名称。
+- `metadata.source_city`：所属城市或地区。
+- `metadata.source`：原始 CSV 文件路径。
+- `metadata.type`、`rating`、`url` 等 CSV 中已有字段（如果存在）。
+
+评测集使用 `relevant_chunk_ids` 标注正确答案，因此指标针对 chunk，而不是只判断景点名称是否出现。
 
 ## 二、细节实现
 
-### 2.1 chunker.py — 通用切分 + LLM 元数据抽取
+### 2.1 数据加载与有效性过滤
 
-**切分**：通用 `RecursiveCharacterTextSplitter`，不绑定文档格式（txt/pdf/md/csv 通吃）：
+建库入口是：
 
-```python
+```powershell
+.\.venv\Scripts\python.exe -X utf8 scripts\rebuild_kb.py
+```
+
+脚本默认扫描仓库根目录的 `citydata/`。当前正式流程支持 CSV 景点数据；已经移除了 RAG 运行时对 `data/dataRAG/docs/` 下 PDF、TXT、MD、CSV 的通用 Loader 导入逻辑。
+
+CSV 加载器会跳过景点名称、正文等关键字段不完整的记录。被跳过的记录不会参与切片、Embedding 或检索。
+
+可用参数：
+
+```text
+--source <目录>       指定 CSV 数据目录
+--keep-existing       保留已有 Chroma 数据并追加
+--resume              保留已有数据，并跳过已存在的 chunk_id
+--limit <数量>        只处理前 N 个原始景点记录
+--use-proxy           按项目配置启用代理
+```
+
+### 2.2 Chunk 切分策略
+
+切片器使用 `RecursiveCharacterTextSplitter`，当前参数为：
+
+```text
+chunk_size = 800
+chunk_overlap = 100
 separators = ["\n\n", "\n", "。", "！", "？", "；", "，", " "]
-chunk_size = 800, chunk_overlap = 100, keep_separator = True
 ```
 
-- 按中文标点层级递归切分，`。！？` 等作为自然断句点，避免把一句话切碎
-- `keep_separator=True` 保留句读符号在 chunk 末尾，保持语义完整
-- 每个 chunk 预置空的标准 metadata 字段（`source_city / area / type / thrill_level`）
+这意味着：
 
-**LLM 元数据抽取**（构建时，非查询时）：
-- 每批 10 个 chunk 拼成一个 JSON 数组 prompt 请求 LLM，**用 1 次调用换 10 条的元数据**（省 90% 调用）
-- 输出解析容错：剥掉 ```` ```json ```` 包裹 → `json.loads` → 长度不匹配时截断/补空，不中断构建
-- **枚举校验**（`_clean_metadata`）：`type` 只接受 `attraction/food/transport/accommodation/info/tips`；`thrill_level` 只接受 `刺激/温和/亲子`，非法值清空——防止 LLM 幻觉污染可过滤字段
-- 单批失败 `continue` 跳过，元数据为空仍入库（检索仍可用，只是失去过滤能力）
+- 目标长度约为 800 个字符，而不是严格保证每个 chunk 都正好 800 个字符。
+- 相邻 chunk 通常保留约 100 个字符的重叠，减少上下文在边界处被截断的问题。
+- 切分优先尝试段落、换行和中文标点，因此实际长度可能小于或略受边界影响。
+- 切片器不会再次调用 LLM，也不会自动把两个景点合并到同一个原始 Document 中。
 
-> 设计意图：元数据是**结构化过滤**的基础。`rag_search` 的 `area`/`thrill_level` 过滤参数就依赖这套抽取质量。
+元数据从原始景点 Document 继承到每个 chunk。当前切片逻辑不再抽取 `area`、`thrill_level` 等旧版字段。
 
-### 2.2 retriever.py — 混合检索 + RRF 融合
+### 2.3 Chunk ID 与目录文件
 
-**双路检索**，每个查询变体都跑两路：
+建库脚本会为 chunk 生成稳定 ID，并处理内容相同导致的重复 ID。每次重建会生成：
 
-- **向量路**：`ChromaDB.similarity_search`（text-embedding-v3，768 维）。用 `asyncio.to_thread` 包装，避免阻塞 Agent 的异步事件循环
-- **关键词路**：`jieba.cut_for_search`（搜索模式分词）→ `BM25Okapi` 打分。BM25 对**专有名词、精确词**（"长隆"、"垂直过山车"）的命中远优于向量
-
-**RRF 融合**（Reciprocal Rank Fusion，无需调参的经典融合）：
-
-```python
-score(doc) = w_vector / (rank_vector + k) + w_bm25 / (rank_bm25 + k)
-# k = 60, w_vector = w_bm25 = 0.5（可配置）
+```text
+data/dataRAG/citydata_chunk_catalog.json
 ```
 
-- 用**排名倒数**而非原始分数，规避了向量分数与 BM25 分数量纲不可比的问题
-- 多查询变体结果按 `content 的 md5` 去重，保留最优 rank
-- 支持 ChromaDB `where` 过滤（`{"$and": [{area: {$eq: ...}}, ...]}`）
+该文件是 chunk 目录清单，记录 `chunk_id`、景点、城市、来源和内容预览，方便检查切片结果和制作评测集。它不是向量数据库，也不包含可直接用于相似度计算的向量。
 
-**已知局限**（写进实现事实）：metadata 过滤只作用于向量检索，BM25 路不参与过滤——过滤条件为真时 BM25 结果可能混入不符合条件的文档。
+真正的向量、原文和元数据保存在：
 
-### 2.3 reranker.py — 精排 + 置信度
+```text
+data/dataRAG/vectordb/
+```
 
-- 调 DashScope `TextReRank` API（`gte-rerank` 模型），query + 候选文档列表一次调用返回 relevance_score
-- `top_n = 3`：只保留前 3 条注入上下文（控制 token 成本）
-- **置信度阈值**：`score < 0.3` 标记 `low_confidence`，输出时打 `[低置信度]` 标签，让下游 Agent 知道信息不可靠
-- **降级**：API 失败（限流/超时）时回退为原始顺序（`1/(i+1)` 伪分数），检索功能不中断
+`vectordb/` 是本地构建产物，已加入 Git 忽略规则，不应提交到代码仓库。
 
-### 2.4 query_transformer.py — 查询改写与扩展
+### 2.4 Embedding 与 ChromaDB
 
-- **改写**：`RAG_QUERY_REWRITE_PROMPT` 将口语查询规范化为检索友好格式（如"长隆带孩子玩咋样" → "长隆欢乐世界 亲子 游玩推荐"）
-- **扩展**：`RAG_MULTI_QUERY_PROMPT` 生成 3 个不同角度变体（具体项目名/体验类型/适合人群），提高召回覆盖
-- 后处理：去编号前缀、去 LLM 可能带出的包裹符号；**保证原始 query 一定在列表里**（扩展失败时兜底）
+每个 chunk 单独调用 `qwen3.7-text-embedding` 生成向量，然后写入 ChromaDB。建库脚本默认按 `RAG_BATCH_SIZE=10` 分批请求，降低单次请求过大和网络超时的风险。
 
-### 2.5 rag_engine.py — 编排器
+Embedding 请求失败时不会产生有效向量。网络超时可能导致脚本中断，因此长时间构建应使用 `--resume` 续跑，并确认当前 API 额度和账户状态正常。
 
-**生命周期**：
-- `get_rag_instance()` 全局单例，首次调用构建
-- 启动时加载现有 ChromaDB，并从已存文档**重建 BM25 索引**（内存索引，不持久化）
-- 子组件全部**延迟初始化**（`_get_xxx()`），查询时才创建 LLM/Reranker 客户端
+RAG 初始化时从 ChromaDB 读取已有 Document，并在内存中重新构建 BM25 索引。BM25 索引当前不是独立的持久化文件。
 
-**全链路降级链**（每个环节失败都不让检索挂掉）：
+### 2.5 混合检索
 
-| 环节 | 失败降级 |
-|------|----------|
-| 知识库未初始化 | 返回提示文案（"知识库未初始化，请先构建知识库"），不抛异常 |
-| 无候选结果 | 返回"未找到相关旅游攻略" |
-| Query 扩展 | 回退为原始 query |
-| BM25 索引未就绪 | 仅用向量检索 |
-| Rerank API 失败 | 使用混合检索原始排序（`1/(i+1)` 伪分数，不标低置信度） |
-| 元数据抽取失败 | chunk 空元数据入库，仅失去过滤能力 |
+混合检索同时使用两条通道：
 
-**配置全参数化**（`config/settings.py`，`_get_config` 延迟读取兼容旧配置）：
+- 向量检索：适合语义相似、表达方式不同的问题。
+- BM25：适合景点名称、专有名词、地址和关键词匹配。
 
-| 配置项 | 默认值 | 含义 |
-|--------|--------|------|
-| `RAG_CHUNK_SIZE` / `RAG_CHUNK_OVERLAP` | 800 / 100 | 切分粒度 |
-| `RAG_RETRIEVE_K` | 10 | 粗筛候选数 |
-| `RAG_RERANK_TOP_N` | 3 | 精排返回数 |
-| `RAG_SEARCH_K` | 3 | 最终返回数 |
-| `RAG_BATCH_SIZE` | 10 | ChromaDB 批量入库大小（遇 API 限制可调小） |
-| `RAG_BM25_WEIGHT` / `RAG_VECTOR_WEIGHT` | 0.5 / 0.5 | RRF 权重 |
-| `RAG_CONFIDENCE_THRESHOLD` | 0.3 | 低置信度阈值 |
-| `RAG_ENABLE_QUERY_REWRITE` | True | 查询改写开关 |
-| `RAG_MULTI_QUERY_COUNT` | 3 | 变体数量 |
+默认权重：
 
-### 2.6 工具层接入
+```text
+向量权重 = 0.5
+BM25 权重 = 0.5
+RRF k = 60
+候选数量 = 10
+```
 
-`rag_search(query, k=3, area="", thrill_level="")` 是暴露给 Agent 的 LangChain `BaseTool`，由 `ToolProvider` 单例持有。Agent（Planner/StepExecutor）在规划中按需调用，将格式化攻略文本注入执行上下文。
+多个 Query 的结果会统一进行 RRF 融合。去重优先使用 `metadata.chunk_id`，只有缺少 chunk_id 时才退回使用来源和正文生成的哈希，避免不同景点正文相同而被错误合并。
 
-**RAG 不只是 Agent 工具，也是记忆系统的知识底座**：`memory/long_term.py` 的 `search_knowledge()` 同样调用 `get_rag_instance().search()`，在长期记忆检索时做知识库扩充（commit 029c195 引入）。同一个 `TravelRAG.search()` 同时服务工具层与记忆层。
+### 2.6 Query 扩展
 
-### 2.7 构建脚本与增量机制
+当前开启多角度 Query 扩展：
 
-`scripts/rebuild_kb.py` 封装全量重建（默认删旧库）与增量更新（`--incremental`）。增量依赖**稳定文档 ID**：`_generate_doc_id()` 取 `source + chunk_index + 内容前 100 字符` 的 md5 生成 UUID，重建时与启动时加载的 `imported_ids` 比对，已入库的 chunk 自动跳过。
+```text
+RAG_ENABLE_QUERY_REWRITE = True
+RAG_MULTI_QUERY_COUNT = 3
+```
 
-Windows 平台坑的工程处理：强制重建前 `gc.collect()` 释放 Chroma 的 SQLite 句柄引用，目录删除带 **5 次重试（间隔 1s）** 应对文件占用（`PermissionError` 时给出"先停止 server.py / uvicorn / Jupyter"的友好提示）；脚本强制 stdout 为 UTF-8，避免 GBK 控制台打印 emoji 报错。
+LLM 会从原始问题生成最多 3 个检索表达，例如将“怎么玩”扩展为攻略、路线、注意事项等角度。扩展失败或超过 30 秒时，系统退回使用原始 Query，不会因为扩展失败而完全停止检索。
 
----
+Query 扩展的作用是提高召回覆盖，不是生成最终答案，也不是重排序。
 
-## 三、关键设计决策
+### 2.7 Rerank 与置信度
 
-| 决策 | 理由 |
-|------|------|
-| **混合检索而非纯向量** | 向量擅长语义相近（"亲子" vs "带娃"），BM25 擅长精确命中（地名/项目名）。旅游攻略大量专有名词，单向量召回漏词。RRF 融合无需调参、对分数量纲鲁棒 |
-| **粗筛→精排两阶段** | 先用便宜检索拿 top-10 候选，再用专门的 rerank 模型精排 top-3。直接全量向量+大模型成本高且慢；rerank 是召回-精排漏斗的标准做法 |
-| **LLM 抽元数据而非规则** | 规则无法覆盖千变万化的文档表述；结构化元数据让"按区域/刺激等级过滤"变成确定性 SQL 式过滤而非二次语义匹配 |
-| **多级降级** | 检索是 Agent 的输入源，不能因 LLM/API 抖动让整个对话失败。每层都有兜底，用户感知是"结果略差"而非"系统挂了" |
-| **模块化 + 兼容 shim** | 重构不破坏既有 import 路径（`tools.rag_tool` 仍可用），风险隔离，可独立演进各模块 |
-| **延迟初始化** | RAG 组件含 LLM 客户端与 Chroma 连接，Agent 不检索时零开销 |
-| **异步线程化** | ChromaDB/Rerank 是同步阻塞库，用 `asyncio.to_thread` 包住，避免卡死 Agent 事件循环 |
+混合检索返回最多 10 个候选后，调用 MaaS HTTP 接口：
 
----
+```text
+模型：qwen3-rerank
+返回数量：5
+请求超时：60 秒
+```
 
-## 四、后续完善方向
+Reranker 接收 `query + documents`，对每个候选 chunk 计算相关性分数并重新排序。它属于 Cross-Encoder 风格的精排步骤：模型同时观察问题和候选文本后判断相关性，而不是只比较两个独立向量。
 
-### 4.1 检索质量
+当前置信度标记规则是：
 
-- [ ] **BM25 支持 metadata 过滤**：当前过滤只作用于向量路，需对 BM25 候选按 `area/thrill_level` 后置过滤或建立倒排-元数据联合索引
-- [ ] **分字段加权检索**：标题/正文分开切分，标题命中加权
-- [ ] **更优的 query 扩展**：引入 HyDE（先让 LLM 生成假设答案再检索）或 embedding-based 查询变体
-- [ ] **父子 chunk（small-to-big）**：检索小片段、返回其所在大段落，上下文更完整
-- [ ] **语义段落切分**：按 Markdown 标题结构 / LLM 语义边界切分，替代固定窗口
-- [ ] **学习型融合**：用 rerank 分数直接替换或加权 RRF，而非固定 0.5/0.5
-- [ ] **Embedding 模型升级**：text-embedding-v3 → v4（维度/精度提升），做一次离线对比
+```text
+score < RAG_CONFIDENCE_THRESHOLD（默认 0.3）→ [低置信度]
+```
 
-### 4.2 工程化
+这个分数是 reranker 的相关性分数，不是经过校准的概率，因此不能直接解释为“有 73% 的正确率”。Rerank API 失败时，系统会按原候选顺序返回，并使用降级分数 `1 / (i + 1)`。
 
-- [ ] **评估体系升级**（最优先）：已有 v1 基线评测——`tests/eval_rag_recall.py` 含 **26 条标注用例（7 类）**，按"期望关键词命中率"计分，实测**整体召回率仅 1.92%**（PASS 阈值 ≥50%，26 条仅 2 条命中）。注意该评测走的是 `as_retriever(similarity, k=3)` **纯向量路径（v1 方式）**，恰好量化了 v2 混合检索要解决的问题。下一步：① 评测迁移到 v2 混合检索+rerank pipeline，与基线对比；② 升级为 RAGAS 的 `recall@k` / `MRR` / `nDCG`；③ 用例扩充到 50-100 条
-- [ ] **增量更新与文档版本**：按文件 hash 检测变更，文档级重建；当前是全库重建
-- [ ] **可观测性**：LangSmith trace 接入检索链路；记录每环节耗时（rewrite/retrieve/rerank），定位瓶颈
-- [ ] **语义缓存**：相同/相似查询命中缓存，省 LLM 改写与 rerank 调用（高频场景收益大）
-- [ ] **存储可扩展性**：知识库增长后 ChromaDB 单机 SQLite 是瓶颈，可迁移 pgvector/Milvus；接口已抽象，`HybridRetriever` 可替换
-- [ ] **并发安全**：单例 + 懒加载存在并发初始化竞态，可用 asyncio.Lock 或进程级预加载
+### 2.8 返回结果与 LLM 输入
 
-### 4.3 交互与体验
+`TravelRAG.search()` 默认按 `RAG_SEARCH_K=5` 返回结果，并会保留每个 chunk 的完整 `page_content`。终端日志中的“内容预览”只显示前 80 个字符，不代表传给后续模块的内容只有 80 个字符。
 
-- [ ] **引用溯源**：输出携带 source/页码，前端可点击回看原文
-- [ ] **置信度驱动的拒答**：全部候选低置信度时明确"知识库未覆盖"，而不是硬答
-- [ ] **反馈闭环**：用户点赞/点踩 → 调整过滤与权重
+当前还有一个接口默认值差异：
 
----
+- 直接调用 RAG 搜索，默认使用配置中的 5 条。
+- Agent 工具 `rag_search(query, k=3)` 默认返回 3 条；调用方传入 `k=5` 时才返回 5 条。
 
-## 五、面试话术
+最终是否把全部返回 chunk 交给 LLM，取决于上层 Agent 的调用逻辑；RAG 检索层本身返回的是 Document 列表或格式化文本。
 
-### 5.1 项目一句话介绍
+### 2.9 主要配置
 
-> 我在智能旅行规划的多 Agent 系统中负责 RAG 知识检索。系统把旅游攻略文档构建成知识库，为 LLM 提供本地化的攻略检索能力。我从 v1 的纯向量检索重构为 **"查询改写 → BM25+向量混合检索(RRF融合) → rerank 精排"** 的三段式 pipeline，召回率和排序准确率都有明显提升，并通过模块化拆分和全链路降级把系统可靠性做上去了。
+| 配置 | 当前值 | 说明 |
+| --- | --- | --- |
+| `EMBEDDING_MODEL` | `qwen3.7-text-embedding` | 文本向量模型 |
+| `RAG_CHUNK_SIZE` | `800` | 切片目标字符数 |
+| `RAG_CHUNK_OVERLAP` | `100` | 相邻切片重叠字符数 |
+| `RAG_RETRIEVE_K` | `10` | 混合检索候选数 |
+| `RAG_SEARCH_K` | `5` | Rerank 后默认返回数 |
+| `RAG_BATCH_SIZE` | `10` | 建库批处理大小 |
+| `RAG_VECTOR_WEIGHT` | `0.5` | 向量检索权重 |
+| `RAG_BM25_WEIGHT` | `0.5` | BM25 权重 |
+| `RAG_RERANK_MODEL` | `qwen3-rerank` | 重排序模型 |
+| `RAG_RERANK_TOP_N` | `5` | 精排返回数 |
+| `RAG_CONFIDENCE_THRESHOLD` | `0.3` | 低置信度标记阈值 |
 
-### 5.2 常见追问与回答
+### 2.10 Chunk 级评测
 
-**Q: 为什么不用纯向量检索？**
-> 旅游攻略有大量专有名词和精确信息（景点名、项目名、价格、营业时间），向量检索对"语义相同、字面不同"有效（亲子 vs 带娃），但对专有名词的精确命中弱。BM25 用 jieba 分词做关键词检索，专有名词命中极强。两者用 RRF 融合——用排名倒数而非原始分数，规避了两套分数量纲不可比的问题，而且 RRF 是经典免调参算法。
+评测集位于：
 
-**Q: RRF 的 k 为什么取 60？**
-> RRF 的 k 是平滑参数，论文与工程实践中 60 是经验值，对融合结果不敏感（一般在 [30,100] 都能工作）。我们配置化了权重（各 0.5），可以根据线上反馈调整——这也说明我理解这个参数的意义，而不是照抄。
+```text
+tests/eval_rag_chunk_cases.json
+```
 
-**Q: 为什么还需要 rerank，混合检索不够吗？**
-> 检索器（BM25/向量）追求召回率，排序质量一般；rerank 模型专门学习"query-文档"相关性，精度更高。我们走"粗筛 top-10 → 精排 top-3"漏斗，既控制注入 LLM 的 token 成本（只放 top-3 进上下文），又保证排序准确率。rerank 模型是付费 API，只在 10 条候选上调用，成本可控。
+每条案例可以标注 1 到多个 `relevant_chunk_ids`。评测程序将检索结果的 `chunk_id` 与标准 ID 集合进行精确匹配，计算：
 
-**Q: chunk size 800 怎么定的？**
-> 基于内容特性：旅游攻略描述通常以景点/项目为语义单元，800 字符（中文）能容纳一个完整项目介绍；100 的重叠保证跨 chunk 的语义连续。我们没有拍脑袋——在评估集上对 400/800/1200 做过初步对比（也可以说这块是计划中的工作，体现诚实）。如果面试官继续追问就说：严格讲我们还有 chunk 粒度自动寻优的空间，这是评估体系完善后要做的第一件事。
+- `Hit Rate@5`：Top 5 是否至少命中一个相关 chunk。
+- `Recall@5`：Top 5 命中的相关 chunk 数 ÷ 该问题相关 chunk 总数。
+- `Precision@5`：Top 5 命中的相关 chunk 数 ÷ 5。
+- `MRR@5`：第一个相关 chunk 的排名倒数。
+- `NDCG@5`：同时考虑命中数量和命中位置。
 
-**Q: LLM 抽元数据失败怎么办？**
-> 三层防护：① 分批 + 单批失败 continue，不中断构建；② 输出做 JSON 解析容错（剥 ```json 包裹、长度不匹配截断补空）；③ 枚举校验，type/thrill_level 只接受白名单值，LLM 幻觉字段直接清空。最坏情况是 chunk 失去过滤能力，但检索本身不受影响。
+执行：
 
-**Q: 系统最大的缺点是什么？**（主动暴露 + 给出方案）
-> 两个诚实的点：一是 metadata 过滤目前只作用于向量检索，BM25 路没有参与过滤，过滤条件下融合结果可能混入不相关文档——我已在后续规划里列为第一优先级；二是评估体系还停留在 v1 基线：现有 26 条用例的评测走的是纯向量检索路径（实测整体召回率仅 1.92%，恰好量化了混合检索重构要解决的问题），但 v2 的混合检索+rerank pipeline 还没纳入评测、RAGAS 指标也没接——这是我下一个迭代要做的事。
+```powershell
+.\.venv\Scripts\python.exe -X utf8 tests\eval_rag_chunk.py
+```
 
-**Q: 怎么保证可靠性？**
-> 检索链路每层都有降级：query 扩展失败用原始 query；BM25 未就绪只走向量；rerank API 失败按原序返回；元数据抽取失败空元数据入库。设计原则是"检索是 Agent 的输入源，任何环节失败都不能让对话挂掉，只能让结果略差"。另外把 ChromaDB 这种同步阻塞调用放到 asyncio.to_thread，避免阻塞 Agent 事件循环。
+结果输出到终端，并写入被 Git 忽略的 `tests/eval_rag_chunk_results.json`。评测集必须在确定切片策略并生成稳定 chunk_id 后标注；如果切片参数或原始数据变化，应重新标注相关 chunk。
 
-### 5.3 可深挖的亮点（面试加分）
+## 三、后续完善方向
 
-1. **兼容 shim 重构**：`rag_tool.py` 保留为 re-export shim，重构全程外部 import 路径零破坏——体现工程化重构意识
-2. **多级降级链设计**：每个外部依赖（LLM/rerank API）都有兜底，这是线上系统思维
-3. **配置全参数化 + 延迟读取**：新配置 `_get_config` 兼容旧 settings 文件，发布无需同步改配置
-4. **成本意识**：LLM 元数据批量抽取（1 次调用 10 条）、top-3 注入控制 token、懒加载组件——体现成本/性能考量
-5. **编码与平台坑**：Windows GBK 编码、SQLite 文件占用问题都用脚本/代码层解决（`rebuild_kb.py` + 重试删除），体现动手解决真实环境问题的能力
-6. **评测集先行的重构**：v2 重构前先用 26 条标注用例跑出 v1 基线（召回率 1.92%），用数据证明重构方向——体现"指标驱动技术决策"的意识
+### 3.1 优先级较高
 
-### 5.4 数字与事实准备
+- 为每个 chunk 增加稳定的业务主键，避免原始数据排序变化导致目录审查困难。
+- 让 BM25 也支持 `source_city` 等元数据过滤，避免混合检索的两条通道过滤行为不一致。
+- 对 Embedding 和 Rerank 增加可恢复的请求级重试、断点日志和失败 chunk 清单。
+- 固定评测集版本，记录切片参数、Embedding 模型、Rerank 模型和代码版本，保证指标可复现。
+- 评测“地址、电话、开放时间”等事实型问题的答案正确性，而不只评测是否召回 chunk。
 
-- 知识库：3 份文档（2 txt + 1 PDF 13 页）→ 切分后 ~9-20+ chunks
-- 检索参数：候选 10 → 精排 3 → 注入 3
-- 模型：Embedding `text-embedding-v3`；Rerank `gte-rerank`；改写 LLM `qwen3.7-plus`
-- 存储：ChromaDB（SQLite 持久化，本地单机）
-- 评测：26 条标注用例、7 类；**v1 纯向量基线整体召回率 1.92%**（仅 2/26 命中，PASS 阈值 ≥50%）
+### 3.2 中期优化
 
-> ⚠️ 诚实红线：唯一实跑过的数字是 **v1 纯向量检索的基线（召回率 1.92%）**；v2 混合检索+rerank **没有**正式评估数字。面试时不要给 v2 编造指标；主动说"v1 基线 1.92% → v2 重构正是为了改善它 → 评测迁移是下个迭代"，按 5.2 的"缺点 + 规划"话术回答反而加分。
+- 对景点名称、地址、电话等字段增加结构化检索或关键词优先策略。
+- 对重叠切片进行上下文关联，在召回相邻 chunk 时合并或限制重复内容。
+- 根据问题类型动态选择召回数量，例如事实查询少返回，攻略查询扩大候选集合。
+- 对 reranker 分数做校准，基于人工标注数据重新确定低置信度阈值。
+- 持久化或可快速重建 BM25 索引，减少服务启动时间和内存消耗。
+
+### 3.3 长期方向
+
+- 引入父文档、子 chunk 的层级检索，兼顾精确命中和完整上下文。
+- 引入时间有效性字段，处理开放时间、票价和联系方式变化。
+- 建立线上检索日志、用户反馈和失败问题回流机制，持续更新评测集。
+- 对答案生成增加引用 chunk_id，支持回答溯源和事实核验。
+
+## 四、面试话术
+
+### 4.1 一句话介绍
+
+这是一个面向景点攻略问答的 Chunk 级混合 RAG：离线将 CSV 景点记录按 800/100 切片并向量化，在线通过多 Query 扩展、向量检索、BM25、RRF 融合和 qwen3-rerank 精排，最后把 Top-K 相关 chunk 交给 LLM 生成回答。
+
+### 4.2 典型问题与回答
+
+**问：为什么不把一个城市或一个景点作为一个 Document？**
+
+答：整城市文档粒度过粗，查询地址或攻略时会把大量无关内容带入上下文；整景点一个 Document 又可能过长。当前先保留景点记录作为父级来源，再按 800 字符切成多个 chunk，在召回精度和上下文完整性之间折中。
+
+**问：为什么使用混合检索？**
+
+答：向量检索擅长语义相似，BM25 擅长景点名称、专有名词和地址等精确词匹配。两者通过 RRF 融合，可以降低单一检索方式的漏召回风险。
+
+**问：Query 扩展和 Rerank 分别解决什么问题？**
+
+答：Query 扩展扩大检索表达，解决“用户问法和原文用词不同”导致的召回不足；Rerank 重新比较问题与候选 chunk 的相关性，解决候选集中排序不准确的问题。
+
+**问：Rerank 返回 5 条，是不是只检索了 5 条？**
+
+答：不是。当前先通过混合检索得到最多 10 个候选，再由 qwen3-rerank 排序并返回前 5 个。10 是候选池大小，5 是最终结果数量，评测中的 `@5` 也表示只看前 5 个结果。
+
+**问：一个问题只有一个相关 chunk 时，Recall@5 如何计算？**
+
+答：如果这个唯一相关 chunk 出现在 Top 5，Recall@5 就是 1，也就是 100%；如果没有命中，就是 0。多个相关 chunk 时，Recall 是命中的相关 chunk 数除以标准答案 chunk 总数。
+
+**问：低置信度标签代表什么？**
+
+答：它表示 reranker 分数低于当前阈值 0.3，只是相关性风险提示，不是经过概率校准的正确率。若要把它用于自动拒答，需要用人工标注数据校准阈值。
+
+**问：如何保证评测结果有效？**
+
+答：先固定切片策略并生成稳定 chunk_id，再标注每个问题对应的 relevant_chunk_ids，最后运行 chunk 级评测。这样评测的是检索是否命中了正确知识片段，而不是只看景点名称是否相同。
+
+**问：当前方案有哪些不足？**
+
+答：BM25 目前在启动时从 Chroma 文档重建，未单独持久化；混合检索的元数据过滤主要作用于向量通道；Embedding 和 Rerank 依赖外部 API，可能受额度、网络和超时影响；另外，当前指标主要反映检索命中情况，尚未完全覆盖最终答案的事实正确性。
+
+### 4.3 面试时应明确的边界
+
+- 目前正式数据源是 `citydata/*.csv`，不是旧的 `data/dataRAG/docs/` 通用文档目录。
+- 当前 chunk 切片不调用 LLM 做元数据抽取。
+- 当前 RAG 使用 `qwen3.7-text-embedding` 做向量化，使用 `qwen3-rerank` 做精排。
+- `Hit Rate@5` 和 `Recall@5` 是检索指标，不等价于最终答案准确率。
+- 评测结果依赖评测集标注质量、chunk 策略、模型版本和数据版本，不能脱离这些条件单独比较。

@@ -20,4 +20,7 @@ tmp/
 
 citydata
 
-multi-agents/data/dataRAG/vectordb/
+multi-agents/data/
+multi-agents/tests/*.json
+multi-agents/docs
+docs/

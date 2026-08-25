@@ -8,13 +8,9 @@ import os
 import hashlib
 import uuid
 import asyncio
-from pathlib import Path
 from typing import List, Optional, Dict, Any
 
 from langchain_chroma import Chroma
-from langchain_community.document_loaders import (
-    PyPDFLoader, TextLoader, CSVLoader, DirectoryLoader,
-)
 from langchain_core.documents import Document
 from langchain_openai import ChatOpenAI
 
@@ -22,16 +18,12 @@ from config.settings import (
     DASHSCOPE_API_KEY,
     EMBEDDING_MODEL,
     CHROMA_PERSIST_DIR,
-    RAG_CHUNK_SIZE,
-    RAG_CHUNK_OVERLAP,
     RAG_SEARCH_K,
-    RAG_BATCH_SIZE,
     QWEN3_API_BASE,
     QWEN3_MODEL,
     QWEN3_TEMPERATURE,
 )
 
-from .chunker import DocumentChunker
 from .dashscope_text_embedding import DashScopeTextEmbedding
 from .query_transformer import QueryTransformer
 from .retriever import HybridRetriever
@@ -65,12 +57,6 @@ class TravelRAG:
         )
 
         # 子组件
-        self.chunker = DocumentChunker(
-            chunk_size=RAG_CHUNK_SIZE,
-            chunk_overlap=RAG_CHUNK_OVERLAP,
-            llm=self._create_llm(),
-            batch_size=RAG_BATCH_SIZE,
-        )
         self._query_transformer: Optional[QueryTransformer] = None
         self._hybrid_retriever: Optional[HybridRetriever] = None
         self._reranker: Optional[DashScopeReranker] = None
@@ -110,7 +96,7 @@ class TravelRAG:
                 print(f"  ⚠️ 初始化辅助索引失败: {e}")
         else:
             print(f"⚠️ 向量数据库不存在: {self.persist_directory}")
-            print("   使用 build_knowledge_base() 方法创建知识库")
+            print("   请运行 scripts/rebuild_kb.py 创建知识库")
 
     def _create_llm(self) -> ChatOpenAI:
         """创建共用的 LLM 实例"""
@@ -269,144 +255,6 @@ class TravelRAG:
             doc.metadata["low_confidence"] = item.get("low_confidence", False)
             results.append(doc)
         return results
-
-    # ------------------------------------------------------------------
-    # 知识库构建
-    # ------------------------------------------------------------------
-
-    def load_documents(self, source_path: str, file_type: str = "auto") -> List[Document]:
-        """加载文档 (复用原有逻辑)"""
-        documents = []
-        path = Path(source_path)
-
-        if file_type == "auto":
-            if path.is_dir():
-                file_type = "directory"
-            else:
-                ext = path.suffix.lower()
-                type_map = {".txt": "txt", ".md": "md", ".pdf": "pdf", ".csv": "csv"}
-                file_type = type_map.get(ext, "txt")
-
-        if file_type in ("txt", "md"):
-            loader = TextLoader(source_path, encoding="utf-8")
-            documents = loader.load()
-        elif file_type == "pdf":
-            loader = PyPDFLoader(source_path)
-            documents = loader.load()
-        elif file_type == "csv":
-            loader = CSVLoader(source_path, encoding="utf-8")
-            documents = loader.load()
-        elif file_type == "directory":
-            for glob_pat, loader_cls, kwargs in [
-                ("**/*.txt", TextLoader, {"encoding": "utf-8"}),
-                ("**/*.md", TextLoader, {"encoding": "utf-8"}),
-                ("**/*.pdf", PyPDFLoader, {}),
-                ("**/*.csv", CSVLoader, {"encoding": "utf-8"}),
-            ]:
-                try:
-                    dl = DirectoryLoader(
-                        source_path, glob=glob_pat,
-                        loader_cls=loader_cls,
-                        loader_kwargs=kwargs,
-                        show_progress=True,
-                    )
-                    docs = dl.load()
-                    documents.extend(docs)
-                    if docs:
-                        print(f"  ✅ {glob_pat}: 加载 {len(docs)} 个文档")
-                except Exception as e:
-                    print(f"  ⚠️ {glob_pat} 加载失败: {e}")
-
-        print(f"\n✅ 总共加载 {len(documents)} 个原始文档")
-        return documents
-
-    def build_knowledge_base(
-        self,
-        source_path: str,
-        file_type: str = "directory",
-        force_recreate: bool = False,
-    ):
-        """构建知识库: 通用切分 → LLM 元数据抽取 → ChromaDB 入库 → BM25 索引"""
-        print(f"\n📂 正在加载文档: {source_path}")
-
-        # 加载
-        documents = self.load_documents(source_path, file_type)
-
-        # 切分 + LLM 元数据抽取
-        print(f"✂️ 切分 + 元数据抽取中...")
-        split_docs = asyncio.run(self.chunker.chunk_and_extract_metadata(documents))
-        print(f"✅ 切分完成: {len(split_docs)} 个 chunks")
-
-        # 生成 UUID
-        doc_ids = [self._generate_doc_id(doc, idx) for idx, doc in enumerate(split_docs)]
-
-        # 去重
-        if not force_recreate and self.imported_ids:
-            new_mask = [doc_id not in self.imported_ids for doc_id in doc_ids]
-            duplicate_count = sum(1 for m in new_mask if not m)
-            if duplicate_count > 0:
-                print(f"  ⚠️ 跳过 {duplicate_count} 个重复 chunks")
-                split_docs = [d for d, m in zip(split_docs, new_mask) if m]
-                doc_ids = [i for i, m in zip(doc_ids, new_mask) if m]
-                print(f"  ✅ 新增 {len(split_docs)} 个 chunks")
-
-        if not split_docs:
-            print(f"⚠️ 没有新文档需要导入")
-            return
-
-        # 强制重建时清除旧库
-        if force_recreate and os.path.exists(self.persist_directory):
-            import gc
-            import shutil
-            import time
-            if self.vector_store:
-                try:
-                    self.vector_store._client.close()
-                except Exception:
-                    pass
-                self.vector_store = None
-            gc.collect()  # 释放引用，便于 SQLite 句柄关闭 (Windows)
-            # Windows 下 Chroma 的 sqlite 句柄可能延迟释放，带重试删除
-            for attempt in range(5):
-                try:
-                    shutil.rmtree(self.persist_directory)
-                    break
-                except PermissionError:
-                    if attempt == 4:
-                        raise PermissionError(
-                            f"无法删除旧向量库 {self.persist_directory}：文件被其他进程占用。\n"
-                            f"请先停止占用该文件的进程（如运行中的 server.py / uvicorn / Jupyter），再重试。"
-                        ) from None
-                    time.sleep(1)
-            self.imported_ids.clear()
-
-        # 批量入库 ChromaDB
-        print(f"📊 正在构建向量数据库...")
-        for i in range(0, len(split_docs), RAG_BATCH_SIZE):
-            batch = split_docs[i:i + RAG_BATCH_SIZE]
-            batch_ids = doc_ids[i:i + RAG_BATCH_SIZE]
-
-            if i == 0 and (force_recreate or not self.vector_store):
-                self.vector_store = Chroma.from_documents(
-                    documents=batch,
-                    embedding=self.embeddings,
-                    persist_directory=self.persist_directory,
-                    collection_name="travel_knowledge",
-                    ids=batch_ids,
-                )
-            else:
-                self.vector_store.add_documents(documents=batch, ids=batch_ids)
-
-            self.imported_ids.update(batch_ids)
-            print(f"  进度: {min(i + RAG_BATCH_SIZE, len(split_docs))}/{len(split_docs)}")
-
-        # 构建 BM25 索引
-        print(f"📊 构建 BM25 索引...")
-        self._hybrid_retriever = None  # reset
-        retriever = self._get_hybrid_retriever()
-        retriever.build_bm25_index(split_docs)
-
-        print(f"✅ 知识库构建完成！总计 {len(self.imported_ids)} 条")
 
     # ------------------------------------------------------------------
     # 辅助方法
