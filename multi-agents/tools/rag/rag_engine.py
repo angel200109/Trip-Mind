@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 
 from langchain_chroma import Chroma
-from langchain_community.embeddings import DashScopeEmbeddings
 from langchain_community.document_loaders import (
     PyPDFLoader, TextLoader, CSVLoader, DirectoryLoader,
 )
@@ -33,6 +32,7 @@ from config.settings import (
 )
 
 from .chunker import DocumentChunker
+from .dashscope_text_embedding import DashScopeTextEmbedding
 from .query_transformer import QueryTransformer
 from .retriever import HybridRetriever
 from .reranker import DashScopeReranker
@@ -59,9 +59,9 @@ class TravelRAG:
         self.imported_ids: set = set()
 
         # Embeddings
-        self.embeddings = DashScopeEmbeddings(
+        self.embeddings = DashScopeTextEmbedding(
             model=EMBEDDING_MODEL,
-            dashscope_api_key=self.embedding_api_key,
+            api_key=self.embedding_api_key,
         )
 
         # 子组件
@@ -119,6 +119,8 @@ class TravelRAG:
             openai_api_base=QWEN3_API_BASE,
             openai_api_key=DASHSCOPE_API_KEY,
             temperature=QWEN3_TEMPERATURE,
+            timeout=30,
+            max_retries=1,
         )
 
     def _get_query_transformer(self) -> QueryTransformer:
@@ -143,7 +145,7 @@ class TravelRAG:
             self._reranker = DashScopeReranker(
                 api_key=self.embedding_api_key,
                 model=_get_config("RAG_RERANK_MODEL", "gte-rerank"),
-                top_n=_get_config("RAG_RERANK_TOP_N", 3),
+                top_n=_get_config("RAG_RERANK_TOP_N", 5),
                 confidence_threshold=_get_config("RAG_CONFIDENCE_THRESHOLD", 0.3),
             )
         return self._reranker
@@ -158,7 +160,7 @@ class TravelRAG:
         Args:
             query: 用户查询
             k: 最终返回数量 (默认 RAG_SEARCH_K)
-            filters: 可选 metadata 过滤 (area, type, thrill_level)
+            filters: 可选 metadata 过滤 (type)
 
         Returns:
             格式化的检索结果字符串
@@ -173,18 +175,65 @@ class TravelRAG:
             print(f"❌ 知识库未初始化")
             return "知识库未初始化，请先构建知识库"
 
+        ranked_docs = await self.retrieve_documents(query, k=k, filters=filters)
+        if not ranked_docs:
+            print(f"❌ 未找到相关结果")
+            return "未找到相关旅游攻略"
+
         k = k or RAG_SEARCH_K
-        retrieve_k = _get_config("RAG_RETRIEVE_K", 10)
+
+        # 4. 格式化输出
+        results = []
+        for i, doc in enumerate(ranked_docs[:k], 1):
+            score = doc.metadata.get("rerank_score", 0.0)
+            content = doc.page_content
+            source = doc.metadata.get("source", "未知")
+            spot_name = doc.metadata.get("spot_name", "")
+            city = doc.metadata.get("source_city", "")
+
+            meta_parts = [f"来源: {source}"]
+            if city:
+                meta_parts.append(f"城市: {city}")
+            if spot_name:
+                meta_parts.append(f"景点: {spot_name}")
+            meta_parts.append(f"相关度: {score:.2f}")
+
+            meta_str = " | ".join(meta_parts)
+            confidence_tag = " [低置信度]" if doc.metadata.get("low_confidence") else ""
+
+            print(f"\n  [{i}] {meta_str}{confidence_tag}")
+            print(f"      内容预览: {content[:80]}...")
+
+            results.append(f"[{i}] {meta_str}{confidence_tag}\n{content}")
+
+        print(f"\n{'='*60}\n")
+        return "\n\n".join(results)
+
+    async def retrieve_documents(
+        self,
+        query: str,
+        k: Optional[int] = None,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> List[Document]:
+        """Return reranked Document objects for evaluation and programmatic use."""
+        if not self.vector_store:
+            return []
+
+        k = k or RAG_SEARCH_K
+        retrieve_k = max(_get_config("RAG_RETRIEVE_K", 10), k)
 
         # 1. Query 扩展
         enable_rewrite = _get_config("RAG_ENABLE_QUERY_REWRITE", True)
         if enable_rewrite:
             try:
                 n = _get_config("RAG_MULTI_QUERY_COUNT", 3)
-                queries = await self._get_query_transformer().expand_queries(query, n=n)
+                queries = await asyncio.wait_for(
+                    self._get_query_transformer().expand_queries(query, n=n),
+                    timeout=30,
+                )
                 print(f"  🔄 Query 扩展: {queries}")
             except Exception as e:
-                print(f"  ⚠️ Query 扩展失败，使用原始查询: {e}")
+                print(f"  ⚠️ Query 扩展失败或超时，使用原始查询: {e}")
                 queries = [query]
         else:
             queries = [query]
@@ -198,8 +247,7 @@ class TravelRAG:
             candidates = await retriever.retrieve(queries, k=retrieve_k, filters=filters)
 
         if not candidates:
-            print(f"❌ 未找到相关结果")
-            return "未找到相关旅游攻略"
+            return []
 
         print(f"  ✅ 混合检索返回 {len(candidates)} 条候选")
 
@@ -213,33 +261,14 @@ class TravelRAG:
             ranked = [{"document": doc, "score": 1.0 / (i + 1), "low_confidence": False}
                       for i, doc in enumerate(candidates[:k])]
 
-        # 4. 格式化输出
         results = []
-        for i, item in enumerate(ranked[:k], 1):
+        for item in ranked[:k]:
             doc = item["document"]
-            score = item["score"]
-            content = doc.page_content[:500]
-            source = doc.metadata.get("source", "未知")
-            area = doc.metadata.get("area", "")
-            thrill = doc.metadata.get("thrill_level", "")
-
-            meta_parts = [f"来源: {source}"]
-            if area:
-                meta_parts.append(f"区域: {area}")
-            if thrill:
-                meta_parts.append(f"刺激等级: {thrill}")
-            meta_parts.append(f"相关度: {score:.2f}")
-
-            meta_str = " | ".join(meta_parts)
-            confidence_tag = " [低置信度]" if item.get("low_confidence") else ""
-
-            print(f"\n  [{i}] {meta_str}{confidence_tag}")
-            print(f"      内容预览: {content[:80]}...")
-
-            results.append(f"[{i}] {meta_str}{confidence_tag}\n{content}")
-
-        print(f"\n{'='*60}\n")
-        return "\n\n".join(results)
+            doc.metadata = dict(doc.metadata)
+            doc.metadata["rerank_score"] = item["score"]
+            doc.metadata["low_confidence"] = item.get("low_confidence", False)
+            results.append(doc)
+        return results
 
     # ------------------------------------------------------------------
     # 知识库构建
@@ -388,7 +417,8 @@ class TravelRAG:
         """生成稳定文档 ID"""
         content = doc.page_content
         source = doc.metadata.get("source", "")
-        hash_input = f"{source}:{chunk_index}:{content[:100]}"
+        # Use source plus full chunk content so IDs do not shift when document order changes.
+        hash_input = f"{source}:{content}"
         hash_hex = hashlib.md5(hash_input.encode("utf-8")).hexdigest()
         return str(uuid.UUID(hash_hex))
 

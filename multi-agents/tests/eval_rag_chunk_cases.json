@@ -1,0 +1,600 @@
+[
+  {
+    "id": "chunk_guide_1_01",
+    "city": "七台河",
+    "spot_name": "七台河博物馆Qitaihe Museum",
+    "query": "请介绍七台河博物馆Qitaihe Museum的开放时间、门票、特色和游玩注意事项。",
+    "relevant_chunk_ids": [
+      "f9cadf3c-7ded-7b3c-cfd0-628fc15dfa4f"
+    ],
+    "relevant_chunk_count": 1
+  },
+  {
+    "id": "chunk_guide_1_02",
+    "city": "七台河",
+    "spot_name": "七台河市博物馆",
+    "query": "去七台河市博物馆旅游有哪些实用攻略和推荐玩法？",
+    "relevant_chunk_ids": [
+      "ae868668-e803-25dd-2e8f-2ae45e909ad9"
+    ],
+    "relevant_chunk_count": 1
+  },
+  {
+    "id": "chunk_guide_1_03",
+    "city": "七台河",
+    "spot_name": "七台河市图书馆Qitaiheshi Library",
+    "query": "如果想完整游玩七台河市图书馆Qitaiheshi Library，应该重点了解哪些信息？",
+    "relevant_chunk_ids": [
+      "066c1563-91a3-698c-4b85-c5bf118074b6"
+    ],
+    "relevant_chunk_count": 1
+  },
+  {
+    "id": "chunk_guide_1_04",
+    "city": "七台河",
+    "spot_name": "七台河市群众艺术馆QiTaiHeShi QunZhong YiShuGuan",
+    "query": "七台河市群众艺术馆QiTaiHeShi QunZhong YiShuGuan有哪些值得体验的项目，游玩时需要注意什么？",
+    "relevant_chunk_ids": [
+      "1924353b-9211-5eb0-641f-f2456f3b469b"
+    ],
+    "relevant_chunk_count": 1
+  },
+  {
+    "id": "chunk_guide_1_05",
+    "city": "七台河",
+    "spot_name": "七台河烈士陵园Qitaihe Martyrs Cemetery",
+    "query": "第一次去七台河烈士陵园Qitaihe Martyrs Cemetery，应该怎么安排游玩路线？",
+    "relevant_chunk_ids": [
+      "666e5f81-b5c9-386d-ddb5-a6842ec23659"
+    ],
+    "relevant_chunk_count": 1
+  },
+  {
+    "id": "chunk_guide_1_06",
+    "city": "七台河",
+    "spot_name": "七彩城QiCai Cheng",
+    "query": "请介绍七彩城QiCai Cheng的开放时间、门票、特色和游玩注意事项。",
+    "relevant_chunk_ids": [
+      "c07371b8-45c3-963d-a8e6-c4b2e13aa3d8"
+    ],
+    "relevant_chunk_count": 1
+  },
+  {
+    "id": "chunk_guide_1_07",
+    "city": "七台河",
+    "spot_name": "万宝湖儿童公园Wanbaohu Children's Park",
+    "query": "去万宝湖儿童公园Wanbaohu Children's Park旅游有哪些实用攻略和推荐玩法？",
+    "relevant_chunk_ids": [
+      "03435d84-1ced-a73c-ae71-a8a48a9e31e0"
+    ],
+    "relevant_chunk_count": 1
+  },
+  {
+    "id": "chunk_guide_1_08",
+    "city": "七台河",
+    "spot_name": "亿达广场Yida Square",
+    "query": "如果想完整游玩亿达广场Yida Square，应该重点了解哪些信息？",
+    "relevant_chunk_ids": [
+      "0ef963f5-35b1-f322-e4c6-e233c813e073"
+    ],
+    "relevant_chunk_count": 1
+  },
+  {
+    "id": "chunk_guide_1_09",
+    "city": "七台河",
+    "spot_name": "仙洞山风景区Xiandongshan Scenic Area",
+    "query": "仙洞山风景区Xiandongshan Scenic Area有哪些值得体验的项目，游玩时需要注意什么？",
+    "relevant_chunk_ids": [
+      "428b24dc-471b-5f8b-988c-a7aa95afc7eb"
+    ],
+    "relevant_chunk_count": 1
+  },
+  {
+    "id": "chunk_guide_1_10",
+    "city": "七台河",
+    "spot_name": "仙湖洞",
+    "query": "第一次去仙湖洞，应该怎么安排游玩路线？",
+    "relevant_chunk_ids": [
+      "3c626982-505c-99f9-e791-16ab71c12285"
+    ],
+    "relevant_chunk_count": 1
+  },
+  {
+    "id": "chunk_guide_2_01",
+    "city": "万宁",
+    "spot_name": "东南亚风情村",
+    "query": "去东南亚风情村旅游有哪些实用攻略和推荐玩法？",
+    "relevant_chunk_ids": [
+      "6cbb66be-443f-49bb-b186-ce5b452eccd2",
+      "8abecf57-344d-6834-f2ee-e61dca4bfed4"
+    ],
+    "relevant_chunk_count": 2
+  },
+  {
+    "id": "chunk_guide_2_02",
+    "city": "三亚",
+    "spot_name": "三亚湾Sanya Bay",
+    "query": "如果想完整游玩三亚湾Sanya Bay，应该重点了解哪些信息？",
+    "relevant_chunk_ids": [
+      "e275edc0-6c68-3cbd-3032-4fa6b2770e2d",
+      "fe702826-d3e2-104a-8971-f2f723bdb896"
+    ],
+    "relevant_chunk_count": 2
+  },
+  {
+    "id": "chunk_guide_2_03",
+    "city": "三亚",
+    "spot_name": "南山不老松",
+    "query": "南山不老松有哪些值得体验的项目，游玩时需要注意什么？",
+    "relevant_chunk_ids": [
+      "5ec1b107-27da-e04e-c821-667b435dc374",
+      "6c464019-7b82-342b-7cf3-b16090815398"
+    ],
+    "relevant_chunk_count": 2
+  },
+  {
+    "id": "chunk_guide_2_04",
+    "city": "三亚",
+    "spot_name": "天涯海角-财富石",
+    "query": "第一次去天涯海角-财富石，应该怎么安排游玩路线？",
+    "relevant_chunk_ids": [
+      "1ca6ed54-1bf3-bea5-8ff8-636a6f418d05",
+      "50d643ec-ffc5-a464-1d76-02807333b84c"
+    ],
+    "relevant_chunk_count": 2
+  },
+  {
+    "id": "chunk_guide_2_05",
+    "city": "三明",
+    "spot_name": "明清园Mingqing Park (West Gate)",
+    "query": "请介绍明清园Mingqing Park (West Gate)的开放时间、门票、特色和游玩注意事项。",
+    "relevant_chunk_ids": [
+      "786641ad-68d5-467f-6e13-504a14b97a3b",
+      "ff966533-eeb8-f925-7e5e-bf2d09f95c2b"
+    ],
+    "relevant_chunk_count": 2
+  },
+  {
+    "id": "chunk_guide_2_06",
+    "city": "三明",
+    "spot_name": "状元岩Number One Scholar Rock",
+    "query": "去状元岩Number One Scholar Rock旅游有哪些实用攻略和推荐玩法？",
+    "relevant_chunk_ids": [
+      "3c2cc6fa-8b66-2fc2-5fd8-fe47c88a1958",
+      "afee27ea-a886-1989-f314-8952a9927670"
+    ],
+    "relevant_chunk_count": 2
+  },
+  {
+    "id": "chunk_guide_2_07",
+    "city": "三门峡",
+    "spot_name": "仰韶大峡谷The Grand Canyon of Yangshao",
+    "query": "如果想完整游玩仰韶大峡谷The Grand Canyon of Yangshao，应该重点了解哪些信息？",
+    "relevant_chunk_ids": [
+      "754c7c39-c7b3-f318-4e9b-02cdeed1239c",
+      "e7b0448d-81ec-c30c-a6b0-727d12442ee1"
+    ],
+    "relevant_chunk_count": 2
+  },
+  {
+    "id": "chunk_guide_2_08",
+    "city": "三门峡",
+    "spot_name": "虢国博物馆Guo State Museum",
+    "query": "虢国博物馆Guo State Museum有哪些值得体验的项目，游玩时需要注意什么？",
+    "relevant_chunk_ids": [
+      "12f5316e-6c29-be9e-f077-be331779ee87",
+      "57e79417-e8a2-c977-62e1-678fe25c4415"
+    ],
+    "relevant_chunk_count": 2
+  },
+  {
+    "id": "chunk_guide_2_09",
+    "city": "上海",
+    "spot_name": "上海城隍庙道观City God Temple of Shanghai",
+    "query": "第一次去上海城隍庙道观City God Temple of Shanghai，应该怎么安排游玩路线？",
+    "relevant_chunk_ids": [
+      "0d29f2fc-d585-68bf-a484-b0a5cd72f8c2",
+      "991d932e-1803-d19c-8996-4ce163662423"
+    ],
+    "relevant_chunk_count": 2
+  },
+  {
+    "id": "chunk_guide_2_10",
+    "city": "上海",
+    "spot_name": "上海星空艺术馆Shanghaixingkong Art Museum",
+    "query": "请介绍上海星空艺术馆Shanghaixingkong Art Museum的开放时间、门票、特色和游玩注意事项。",
+    "relevant_chunk_ids": [
+      "51165988-3fdd-42c1-3ec7-955d025b212e",
+      "c8e97187-1aab-8f62-b65b-953295aee422"
+    ],
+    "relevant_chunk_count": 2
+  },
+  {
+    "id": "chunk_guide_3_01",
+    "city": "万宁",
+    "spot_name": "亚洲风情园",
+    "query": "如果想完整游玩亚洲风情园，应该重点了解哪些信息？",
+    "relevant_chunk_ids": [
+      "35c05067-10d3-0089-bc3e-837a78887649",
+      "5075d27f-c02f-756d-4c38-cc143f8af4d0",
+      "7c9f243b-1dff-f86a-3101-9f4f3f31f238"
+    ],
+    "relevant_chunk_count": 3
+  },
+  {
+    "id": "chunk_guide_3_02",
+    "city": "三亚",
+    "spot_name": "亚龙湾中心广场Yalong Bay Central Square",
+    "query": "亚龙湾中心广场Yalong Bay Central Square有哪些值得体验的项目，游玩时需要注意什么？",
+    "relevant_chunk_ids": [
+      "26804836-ebe9-b06f-c5b5-b284e3629934",
+      "3e04a6ca-fc93-e92e-e2cc-76ef96cdef04",
+      "b32daeb8-035c-1c5a-7a00-91f3b3d7535d"
+    ],
+    "relevant_chunk_count": 3
+  },
+  {
+    "id": "chunk_guide_3_03",
+    "city": "三亚",
+    "spot_name": "蜈支洲岛Wuzhizhou Island",
+    "query": "第一次去蜈支洲岛Wuzhizhou Island，应该怎么安排游玩路线？",
+    "relevant_chunk_ids": [
+      "5487a8fc-6421-61e6-b7dc-cefe1235e8ad",
+      "ef34d62c-0e72-26fc-5f11-6f4e3510b5da",
+      "fc59c1cd-f17d-a4fd-a5e7-bfbc2e94b2d8"
+    ],
+    "relevant_chunk_count": 3
+  },
+  {
+    "id": "chunk_guide_3_04",
+    "city": "三亚",
+    "spot_name": "西岛West Island",
+    "query": "请介绍西岛West Island的开放时间、门票、特色和游玩注意事项。",
+    "relevant_chunk_ids": [
+      "31ba1a1d-ed56-0eee-23df-460576e342aa",
+      "584aad9a-5542-9f74-d3e2-aa9e9adcbe51",
+      "e540db68-068e-0242-105c-deb137ae64ef"
+    ],
+    "relevant_chunk_count": 3
+  },
+  {
+    "id": "chunk_guide_3_05",
+    "city": "三明",
+    "spot_name": "大金湖Dajin Lake",
+    "query": "去大金湖Dajin Lake旅游有哪些实用攻略和推荐玩法？",
+    "relevant_chunk_ids": [
+      "83402aaa-a5a1-51bb-e916-88d16d5f504c",
+      "aacf53e7-667d-b060-b632-267da3b71981",
+      "f3df162c-635b-4b8d-9af2-70eac20efd8b"
+    ],
+    "relevant_chunk_count": 3
+  },
+  {
+    "id": "chunk_guide_3_06",
+    "city": "三明",
+    "spot_name": "天鹅洞群Swan Cave Group",
+    "query": "如果想完整游玩天鹅洞群Swan Cave Group，应该重点了解哪些信息？",
+    "relevant_chunk_ids": [
+      "0553575f-4f24-3922-25ad-3cc9655ee5af",
+      "31dcb759-4025-e316-eef8-c63769db74b1",
+      "9e76f59e-c5ee-ccb7-2fb5-735afbaec40b"
+    ],
+    "relevant_chunk_count": 3
+  },
+  {
+    "id": "chunk_guide_3_07",
+    "city": "三门峡",
+    "spot_name": "仰韶村文化遗址",
+    "query": "仰韶村文化遗址有哪些值得体验的项目，游玩时需要注意什么？",
+    "relevant_chunk_ids": [
+      "622ce8f6-e0f8-3568-75d5-79a68a331ad9",
+      "85033bff-474c-e3b1-32de-308a3bb4e0b1",
+      "b1e2cbf5-3b22-1407-7210-350876093be4"
+    ],
+    "relevant_chunk_count": 3
+  },
+  {
+    "id": "chunk_guide_3_08",
+    "city": "上海",
+    "spot_name": "上海博物馆Shanghai Museum",
+    "query": "第一次去上海博物馆Shanghai Museum，应该怎么安排游玩路线？",
+    "relevant_chunk_ids": [
+      "02dbb326-8383-5952-d205-85c4ddf57bf9",
+      "1632a7c1-a86e-a81e-afd1-e2d47223f0c4",
+      "2e586714-bfb0-17bc-9554-16090a72d22f"
+    ],
+    "relevant_chunk_count": 3
+  },
+  {
+    "id": "chunk_guide_3_09",
+    "city": "上海",
+    "spot_name": "上海影视乐园Shanghai Film Park",
+    "query": "请介绍上海影视乐园Shanghai Film Park的开放时间、门票、特色和游玩注意事项。",
+    "relevant_chunk_ids": [
+      "22878e85-eb5e-758e-f463-74de152e8ea4",
+      "61111fd6-8129-555a-8994-8ffdb8164285",
+      "bf88fbac-9ae1-ae5d-996e-506502a33d58"
+    ],
+    "relevant_chunk_count": 3
+  },
+  {
+    "id": "chunk_guide_3_10",
+    "city": "上海",
+    "spot_name": "上海汽车博物馆Shanghai Automobile Museum",
+    "query": "去上海汽车博物馆Shanghai Automobile Museum旅游有哪些实用攻略和推荐玩法？",
+    "relevant_chunk_ids": [
+      "1349069a-6d87-228d-0695-81e36dd92a7b",
+      "3f65aa95-f27c-7717-175d-b6a9d0c36d2f",
+      "acdd7445-bfe4-00f2-64a0-a13fb1ebe3f3"
+    ],
+    "relevant_chunk_count": 3
+  },
+  {
+    "id": "chunk_guide_4_01",
+    "city": "七台河",
+    "spot_name": "西大圈",
+    "query": "西大圈有哪些值得体验的项目，游玩时需要注意什么？",
+    "relevant_chunk_ids": [
+      "12167489-1d3b-ee46-b634-ab6450752e99",
+      "36107acf-3bc5-001e-7f0f-85e275e6ffd8",
+      "c51a5595-0356-319f-a6fb-9cf166a96a7d",
+      "f7c5edc4-cf34-b30d-81ce-689248570f24"
+    ],
+    "relevant_chunk_count": 4
+  },
+  {
+    "id": "chunk_guide_4_02",
+    "city": "万宁",
+    "spot_name": "青云塔",
+    "query": "第一次去青云塔，应该怎么安排游玩路线？",
+    "relevant_chunk_ids": [
+      "12e120f0-9029-9060-033b-a36b202e92f2",
+      "169e5b2c-fc0c-d735-a50c-8fe225a20209",
+      "60e90dbd-e0e8-ac00-0666-7deaae0c6923",
+      "c2bdfe36-0f83-b1a8-879a-b5e45679df7d"
+    ],
+    "relevant_chunk_count": 4
+  },
+  {
+    "id": "chunk_guide_4_03",
+    "city": "三明",
+    "spot_name": "上清溪Shangqing Rivulet",
+    "query": "请介绍上清溪Shangqing Rivulet的开放时间、门票、特色和游玩注意事项。",
+    "relevant_chunk_ids": [
+      "3b12c9c4-9090-996b-eaa6-a53e779bcbe3",
+      "80bc1329-2177-c23f-5bcc-366121f366a2",
+      "b52a744a-5938-216d-90a3-51a619e3d4c4",
+      "e8fc44ba-fc87-256d-ed1b-0f8fad39c390"
+    ],
+    "relevant_chunk_count": 4
+  },
+  {
+    "id": "chunk_guide_4_04",
+    "city": "三门峡",
+    "spot_name": "中流砥柱",
+    "query": "去中流砥柱旅游有哪些实用攻略和推荐玩法？",
+    "relevant_chunk_ids": [
+      "01b5e2f3-8fc8-8a43-a0b9-6d80e3b98380",
+      "040f064c-b82a-a894-708f-1a6dfbc23f42",
+      "2fea9cf6-b69f-9101-3c80-64e6587ec64e",
+      "addfbadd-297d-3549-e250-b8d4b9022812"
+    ],
+    "relevant_chunk_count": 4
+  },
+  {
+    "id": "chunk_guide_4_05",
+    "city": "三门峡",
+    "spot_name": "空厢寺",
+    "query": "如果想完整游玩空厢寺，应该重点了解哪些信息？",
+    "relevant_chunk_ids": [
+      "11c986a7-fcba-378d-640b-29c7742421df",
+      "9ebf4fa6-53fe-ba10-76d5-a2b358b5a948",
+      "da0f0ade-4ee9-2bfe-25e0-d9fd6d67559d",
+      "e2ef1a68-02fa-0195-753e-bcea848a7172"
+    ],
+    "relevant_chunk_count": 4
+  },
+  {
+    "id": "chunk_guide_4_06",
+    "city": "上海",
+    "spot_name": "田子坊Tianzifang",
+    "query": "田子坊Tianzifang有哪些值得体验的项目，游玩时需要注意什么？",
+    "relevant_chunk_ids": [
+      "3942b256-ef14-6e81-ba39-3aa5075011c2",
+      "46a24f1f-67bb-1640-183a-d5cbdac0416c",
+      "6a5f5ab3-5dd7-c087-c044-79f14a12cc99",
+      "e016cb2e-d875-6ad9-46ba-8c5b3795dc44"
+    ],
+    "relevant_chunk_count": 4
+  },
+  {
+    "id": "chunk_guide_4_07",
+    "city": "上饶",
+    "spot_name": "巨蟒出山Python Mountains",
+    "query": "第一次去巨蟒出山Python Mountains，应该怎么安排游玩路线？",
+    "relevant_chunk_ids": [
+      "0e1b1341-f728-36f3-0746-f0363fcbf237",
+      "ed00a2de-e472-8a9e-b8ac-402f5d2b185f"
+    ],
+    "relevant_chunk_count": 2
+  },
+  {
+    "id": "chunk_guide_4_08",
+    "city": "上饶",
+    "spot_name": "思溪延村Sixiyan Village",
+    "query": "请介绍思溪延村Sixiyan Village的开放时间、门票、特色和游玩注意事项。",
+    "relevant_chunk_ids": [
+      "01f1a334-6420-4960-7768-7cf2a280b93d",
+      "355d3371-f903-7647-c5ff-3ad388b48baa",
+      "4d15b9b3-96a8-8cb5-7af7-9cd5ac7961f9",
+      "9d35eeee-ee45-c143-266e-faa8bf091e98"
+    ],
+    "relevant_chunk_count": 4
+  },
+  {
+    "id": "chunk_guide_4_09",
+    "city": "上饶",
+    "spot_name": "西海岸景区West Coast Scenic Area",
+    "query": "去西海岸景区West Coast Scenic Area旅游有哪些实用攻略和推荐玩法？",
+    "relevant_chunk_ids": [
+      "33db4c2e-7287-16fb-9a3c-5f7964d4e07a",
+      "5e1ad000-fe1a-888f-8eb1-1503c983ce39",
+      "718f5587-3167-30f5-f60d-7e041f2cefbb",
+      "793ce66b-05ce-c219-5bc1-e05c13194e3c"
+    ],
+    "relevant_chunk_count": 4
+  },
+  {
+    "id": "chunk_guide_4_10",
+    "city": "东方",
+    "spot_name": "白查村船形茅草屋Boat-shaped cottage house in Baicha Village",
+    "query": "如果想完整游玩白查村船形茅草屋Boat-shaped cottage house in Baicha Village，应该重点了解哪些信息？",
+    "relevant_chunk_ids": [
+      "98d2d541-d12b-19a8-f31d-1e442e99f7a3",
+      "c9acef7c-7641-9abf-b5cb-f6892bfe6b7d",
+      "cc0607a1-78b2-566e-3255-acaf260bafc5",
+      "cd705740-07bc-6030-eb6b-960b81882997"
+    ],
+    "relevant_chunk_count": 4
+  },
+  {
+    "id": "chunk_guide_5_01",
+    "city": "三亚",
+    "spot_name": "三亚亚特兰蒂斯失落的空间水族馆The Lost Chambers Aquarium (Sanya)",
+    "query": "第一次去三亚亚特兰蒂斯失落的空间水族馆The Lost Chambers Aquarium (Sanya)，应该怎么安排游玩路线？",
+    "relevant_chunk_ids": [
+      "27f67c1b-5e67-a837-367f-2a8d40e0de8b",
+      "6113c7ac-b851-6e64-93c9-b286cf585a07",
+      "ebcf6cea-cd1d-f4eb-b51c-6e6bdccd6f9a",
+      "ecf87aea-3bda-9a44-34db-7ecf059191cd",
+      "f07ac0c3-d7e8-b418-9471-5bb00d552a01"
+    ],
+    "relevant_chunk_count": 5
+  },
+  {
+    "id": "chunk_guide_5_02",
+    "city": "三亚",
+    "spot_name": "鹿回头风景区Luhuitou Scenic Area",
+    "query": "请介绍鹿回头风景区Luhuitou Scenic Area的开放时间、门票、特色和游玩注意事项。",
+    "relevant_chunk_ids": [
+      "0c48e56b-78e0-ea56-10c7-62271915a65c",
+      "85ca5151-8901-f85a-ed72-0054610fc82a",
+      "8c5a7406-6c4c-599f-b887-7b93a508a0d2",
+      "b795d367-bcb2-4cbb-c53b-cda5c2ba11d0",
+      "cb07e771-6a34-297c-bd00-e4f228964909"
+    ],
+    "relevant_chunk_count": 5
+  },
+  {
+    "id": "chunk_guide_5_03",
+    "city": "三明",
+    "spot_name": "尚书第Shangshu Mansion",
+    "query": "去尚书第Shangshu Mansion旅游有哪些实用攻略和推荐玩法？",
+    "relevant_chunk_ids": [
+      "00570288-a4fb-a979-af40-97f90540c0fa",
+      "73152c58-3886-6027-ca23-0d6bd979abc7",
+      "b5b1e738-7e25-1d2b-19ac-d1197464b3e9",
+      "d2af7252-ad90-895a-d3db-cb78d4cc9d92",
+      "ff6a9fb3-815d-1d9f-6fdb-02f5bbf01906"
+    ],
+    "relevant_chunk_count": 5
+  },
+  {
+    "id": "chunk_guide_5_04",
+    "city": "三明",
+    "spot_name": "鳞隐石林Fujian Linyin Stone Forest",
+    "query": "如果想完整游玩鳞隐石林Fujian Linyin Stone Forest，应该重点了解哪些信息？",
+    "relevant_chunk_ids": [
+      "38e65e0d-0220-ae6c-2573-bde4ca20d1a9",
+      "69eb09ad-f53a-78af-8c39-2e74dbd67847",
+      "8934b9a9-7447-9541-6974-948bc411d6a9",
+      "d683da0d-4a9c-4699-e09e-34e8f201fe0a",
+      "dccfb66e-fece-982e-61b5-b139f95b2bd9"
+    ],
+    "relevant_chunk_count": 5
+  },
+  {
+    "id": "chunk_guide_5_05",
+    "city": "上海",
+    "spot_name": "上海共青森林公园Gongqing National Forest Park",
+    "query": "上海共青森林公园Gongqing National Forest Park有哪些值得体验的项目，游玩时需要注意什么？",
+    "relevant_chunk_ids": [
+      "0c0d1788-4c98-c1fa-0652-f78a254ac1ad",
+      "1352c8dc-4974-9a19-50f7-a214369a759f",
+      "355e2260-fc48-c93c-d243-163dc658ba39",
+      "bec812e1-a026-9fef-70ef-cc2dede9b53d",
+      "fd840574-b413-d8c7-32dd-346834a3bbe2"
+    ],
+    "relevant_chunk_count": 5
+  },
+  {
+    "id": "chunk_guide_5_06",
+    "city": "上海",
+    "spot_name": "上海天文馆Shanghai Planetarium",
+    "query": "第一次去上海天文馆Shanghai Planetarium，应该怎么安排游玩路线？",
+    "relevant_chunk_ids": [
+      "5ea50723-eb2b-dcce-6674-7420558469c6",
+      "6550b474-666b-6d2d-43d7-5e1c474d2f7b",
+      "9d1c7624-1654-403a-bbd1-a97ab6f359f6",
+      "a93d4724-7613-d9eb-eb2f-33bd41d65aaf",
+      "f3f7d69f-3b86-7655-b1d8-2aeb82d5147e"
+    ],
+    "relevant_chunk_count": 5
+  },
+  {
+    "id": "chunk_guide_5_07",
+    "city": "上海",
+    "spot_name": "上海滨江森林公园Binjiang Forest Park",
+    "query": "请介绍上海滨江森林公园Binjiang Forest Park的开放时间、门票、特色和游玩注意事项。",
+    "relevant_chunk_ids": [
+      "4597de51-4cd8-5fc9-7500-e8c508d1c0d5",
+      "58cb28cb-8c11-ccbc-9cb9-4e4b870b854d",
+      "82d0a7f7-c168-5fc2-cf2d-0d5b21507bdb",
+      "c04ca7c2-ce71-7bcd-d18c-de336860ff1a",
+      "d409bc61-b404-3ec2-b051-791012b1b997"
+    ],
+    "relevant_chunk_count": 5
+  },
+  {
+    "id": "chunk_guide_5_08",
+    "city": "上海",
+    "spot_name": "上海自然博物馆Shanghai Natural History Museum",
+    "query": "去上海自然博物馆Shanghai Natural History Museum旅游有哪些实用攻略和推荐玩法？",
+    "relevant_chunk_ids": [
+      "23a139ec-531a-bfc1-8c01-b1393c77b703",
+      "8f05dbf2-e2bd-bc50-79d8-04ab04492d28",
+      "dae77193-0ea0-08f6-30da-a80539c2a59c",
+      "f3805b16-b19e-1a51-1c4e-3551c76a245d",
+      "fd7e74e6-e7e6-400e-c2cb-99e54d0336bf"
+    ],
+    "relevant_chunk_count": 5
+  },
+  {
+    "id": "chunk_guide_5_09",
+    "city": "上海",
+    "spot_name": "上海薰衣草公园Momchilovtsi Herb Garden",
+    "query": "如果想完整游玩上海薰衣草公园Momchilovtsi Herb Garden，应该重点了解哪些信息？",
+    "relevant_chunk_ids": [
+      "120194e6-d4c6-af9e-7415-dabc9992466c",
+      "3eef1af0-def2-5b27-0dea-2534ee6b63a5",
+      "482118ff-4837-77eb-eb15-662ad7e6a51f",
+      "81f06f28-13f5-3b38-9b0d-c4ebc8352a32",
+      "afc94907-682d-7745-656c-efdad3758ec6"
+    ],
+    "relevant_chunk_count": 5
+  },
+  {
+    "id": "chunk_guide_5_10",
+    "city": "上海",
+    "spot_name": "上海辰山植物园Shanghai Chenshan Botanical Garden",
+    "query": "上海辰山植物园Shanghai Chenshan Botanical Garden有哪些值得体验的项目，游玩时需要注意什么？",
+    "relevant_chunk_ids": [
+      "23655f50-5475-b9d3-4a5d-18ffbac6b5f6",
+      "3b42dadd-8567-cbbc-ea22-f8d84619a499",
+      "698b3321-147d-83f3-1953-3c62be51520d",
+      "ca4ff4c8-62bc-2773-629f-efd45d2c4b81",
+      "efcbbeb7-5676-72c4-b023-f3fc64c7367a"
+    ],
+    "relevant_chunk_count": 5
+  }
+]

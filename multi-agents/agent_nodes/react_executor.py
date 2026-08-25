@@ -114,6 +114,8 @@ async def react_executor_node(state: GlobalState) -> Dict[str, Any]:
         base_url=QWEN3_API_BASE,
         api_key=DASHSCOPE_API_KEY,
         temperature=QWEN3_TEMPERATURE,
+        timeout=90,
+        max_retries=1,
     )
 
     # 构建 system_prompt
@@ -171,7 +173,7 @@ async def react_executor_node(state: GlobalState) -> Dict[str, Any]:
     # 调用 agent
     result = await agent.ainvoke({
         "messages": [HumanMessage(content=user_query)]
-    })
+    }, config={"recursion_limit": 8})
 
     # 提取消息
     messages = result.get("messages", [])

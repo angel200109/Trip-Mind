@@ -93,7 +93,9 @@ async def summarizer_agent_node(state: GlobalState) -> Dict[str, Any]:
         base_url=QWEN3_API_BASE,
         api_key=DASHSCOPE_API_KEY,
         temperature=QWEN3_TEMPERATURE,
-        streaming=True
+        streaming=True,
+        timeout=90,
+        max_retries=1,
     )
     
     # 简单查询模式的提示词 - 更简洁，专注于用户的具体问题

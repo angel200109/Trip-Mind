@@ -22,9 +22,7 @@ METADATA_EXTRACTION_PROMPT = """你是旅游知识库的标注助手。请为以
 请严格按以下 JSON 格式输出（不要输出其他内容）：
 {{
   "source_city": "文中提到的城市名，如无法判断则留空",
-  "area": "所属景区/区域名称，如无法判断则留空",
   "type": "内容类型，从以下选择: attraction/food/transport/accommodation/info/tips",
-  "thrill_level": "如果是游乐项目，填写: 刺激/温和/亲子；非游乐项目留空"
 }}"""
 
 BATCH_METADATA_PROMPT = """你是旅游知识库的标注助手。请为以下 {count} 个文本片段分别提取结构化元数据。
@@ -33,7 +31,7 @@ BATCH_METADATA_PROMPT = """你是旅游知识库的标注助手。请为以下 {
 
 请严格按以下 JSON 数组格式输出（不要输出其他内容），数组长度必须为 {count}：
 [
-  {{"source_city": "城市名或空", "area": "区域名或空", "type": "attraction/food/transport/accommodation/info/tips", "thrill_level": "刺激/温和/亲子或空"}},
+  {{"source_city": "城市名或空", "type": "attraction/food/transport/accommodation/info/tips"}},
   ...
 ]"""
 
@@ -65,9 +63,7 @@ class DocumentChunker:
         # 确保每个 chunk 都有标准 metadata 字段
         for chunk in chunks:
             chunk.metadata.setdefault("source_city", "")
-            chunk.metadata.setdefault("area", "")
             chunk.metadata.setdefault("type", "")
-            chunk.metadata.setdefault("thrill_level", "")
 
         return chunks
 
@@ -157,19 +153,13 @@ class DocumentChunker:
             return {}
 
         valid_types = {"attraction", "food", "transport", "accommodation", "info", "tips"}
-        valid_thrill = {"刺激", "温和", "亲子"}
-
         cleaned = {
             "source_city": str(meta.get("source_city", "") or "").strip(),
-            "area": str(meta.get("area", "") or "").strip(),
             "type": str(meta.get("type", "") or "").strip(),
-            "thrill_level": str(meta.get("thrill_level", "") or "").strip(),
         }
 
         # 校验枚举值
         if cleaned["type"] not in valid_types:
             cleaned["type"] = ""
-        if cleaned["thrill_level"] not in valid_thrill:
-            cleaned["thrill_level"] = ""
 
         return cleaned

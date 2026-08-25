@@ -143,5 +143,11 @@ class HybridRetriever:
 
     @staticmethod
     def _doc_hash(doc: Document) -> str:
-        """文档内容 hash，用于去重"""
-        return hashlib.md5(doc.page_content.encode("utf-8")).hexdigest()[:16]
+        """生成检索去重键，优先使用 chunk_id，避免跨景点误合并。"""
+        chunk_id = doc.metadata.get("chunk_id")
+        if chunk_id:
+            return str(chunk_id)
+
+        source = doc.metadata.get("source", "")
+        fallback = f"{source}:{doc.page_content}"
+        return hashlib.md5(fallback.encode("utf-8")).hexdigest()[:16]
